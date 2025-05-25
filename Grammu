@@ -1,7 +1,15 @@
 --// COCO HUB - FULL FEATURED SCRIPT (with Hitbox Expander)
 
--- โหลด Kavo UI Library
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+-- โหลด Kavo UI Library แบบปลอดภัย
+local success, Library = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+end)
+
+if not success or not Library then
+    warn("โหลด Kavo UI Library ไม่สำเร็จ!")
+    return
+end
+
 local Window = Library.CreateLib("COCO HUB", "DarkTheme")
 
 -- ========================================================================
@@ -30,125 +38,131 @@ local silentFOVCircle = nil
 
 -- รีเฟรชรายชื่อผู้เล่น
 local function refreshPlayers()
-    local list = {}
-    for _, v in pairs(game.Players:GetPlayers()) do
-        table.insert(list, v.Name)
-    end
-    if drop then drop:Refresh(list) end
+    local list = {}
+    for _, v in pairs(game.Players:GetPlayers()) do
+        table.insert(list, v.Name)
+    end
+    if drop then drop:Refresh(list) end
 end
 refreshPlayers()
 
 drop = Section:NewDropdown("Select Player!", "Click To Select", {}, function(t)
-    PlayerTP = t
+    PlayerTP = t
 end)
 
 Section:NewButton("Click To TP", "", function()
-    local target = game.Players:FindFirstChild(PlayerTP)
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        Plr.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
-    end
+    local target = game.Players:FindFirstChild(PlayerTP)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        Plr.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+    end
 end)
 
 Section:NewButton("Refresh Dropdown", "Refreshes Dropdown", function()
-    refreshPlayers()
+    refreshPlayers()
 end)
 
 Section:NewToggle("ESP", "Toggle ESP", function(state)
-    _G.ESP = state
-    local localName = Plr.Name
-    task.spawn(function()
-        while _G.ESP do
-            task.wait(0.1)
-            for _, v in pairs(game.Players:GetPlayers()) do
-                if v.Name ~= localName and v.Character then
-                    if not v.Character:FindFirstChild("ESP") then
-                        local hl = Instance.new("Highlight", v.Character)
-                        hl.Name = "ESP"
-                        hl.FillColor = Color3.new(0,1,0.08)
-                        hl.OutlineColor = Color3.new(0.9,1,0)
-                        hl.FillTransparency = 0.5
-                        hl.Adornee = v.Character
-                    end
-                end
-            end
-        end
-        for _, v in pairs(game.Players:GetPlayers()) do
-            if v.Character and v.Character:FindFirstChild("ESP") then
-                v.Character.ESP:Destroy()
-            end
-        end
-    end)
+    _G.ESP = state
+    local localName = Plr.Name
+    task.spawn(function()
+        while _G.ESP do
+            task.wait(0.1)
+            for _, v in pairs(game.Players:GetPlayers()) do
+                if v.Name ~= localName and v.Character then
+                    if not v.Character:FindFirstChild("ESP") then
+                        local hl = Instance.new("Highlight", v.Character)
+                        hl.Name = "ESP"
+                        hl.FillColor = Color3.new(0,1,0.08)
+                        hl.OutlineColor = Color3.new(0.9,1,0)
+                        hl.FillTransparency = 0.5
+                        hl.Adornee = v.Character
+                    end
+                end
+            end
+        end
+        for _, v in pairs(game.Players:GetPlayers()) do
+            if v.Character and v.Character:FindFirstChild("ESP") then
+                v.Character.ESP:Destroy()
+            end
+        end
+    end)
 end)
 
 Section:NewToggle("High Jump", "Enable high jump", function(state)
-    highJump = state
-    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        humanoid.JumpPower = highJump and 100 or 50
-    end
+    highJump = state
+    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.JumpPower = highJump and 100 or 50
+    end
 end)
 
 Section:NewSlider("Speed", "Adjust your speed", 100, 16, function(value)
-    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        humanoid.WalkSpeed = value
-    end
+    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.WalkSpeed = value
+    end
 end)
 
+-- ฟังก์ชันสร้างวงกลม FOV สำหรับ Aimbot
 local function createFOVCircle()
-    if fovCircle then fovCircle:Remove() end
-    fovCircle = Drawing.new("Circle")
-    fovCircle.Color = Color3.fromRGB(255,0,0)
-    fovCircle.Thickness = 2
-    fovCircle.Transparency = 0.5
-    fovCircle.Radius = fov
-    fovCircle.Filled = false
-    fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-    fovCircle.Visible = true
+    if fovCircle then fovCircle:Remove() end
+    -- ตรวจสอบว่า Drawing API ใช้ได้ไหม
+    if not pcall(function() Drawing.new("Circle") end) then
+        warn("Drawing API ไม่รองรับใน Exploit นี้")
+        return
+    end
+    fovCircle = Drawing.new("Circle")
+    fovCircle.Color = Color3.fromRGB(255,0,0)
+    fovCircle.Thickness = 2
+    fovCircle.Transparency = 0.5
+    fovCircle.Radius = fov
+    fovCircle.Filled = false
+    fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+    fovCircle.Visible = true
 
-    task.spawn(function()
-        while fovCircle do
-            task.wait()
-            local hue = (tick() % 5) / 5
-            fovCircle.Color = Color3.fromHSV(hue,1,1)
-            fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-        end
-    end)
+    task.spawn(function()
+        while fovCircle do
+            task.wait()
+            local hue = (tick() % 5) / 5
+            fovCircle.Color = Color3.fromHSV(hue,1,1)
+            fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+        end
+    end)
 end
 
 Section:NewToggle("FOV Aimbot with Rainbow Circle", "Enable/disable", function(state)
-    aimbotEnabled = state
-    if state then
-        createFOVCircle()
-        task.spawn(function()
-            while aimbotEnabled do
-                task.wait(0.1)
-                local closest, dist = nil, math.huge
-                for _, p in pairs(game.Players:GetPlayers()) do
-                    if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
-                        local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
-                        if onScreen then
-                            local d = (Vector2.new(pos.X,pos.Y) - fovCircle.Position).Magnitude
-                            if d < fov and d < dist then
-                                closest, dist = p.Character.Head, d
-                            end
-                        end
-                    end
-                end
-                if closest then
-                    camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
-                end
-            end
-            if fovCircle then fovCircle:Remove(); fovCircle = nil end
-        end)
-    else
-        if fovCircle then fovCircle:Remove() fovCircle = nil end
-    end
+    aimbotEnabled = state
+    if state then
+        createFOVCircle()
+        task.spawn(function()
+            while aimbotEnabled do
+                task.wait(0.1)
+                local closest, dist = nil, math.huge
+                for _, p in pairs(game.Players:GetPlayers()) do
+                    if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+                        local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
+                        if onScreen then
+                            local d = (Vector2.new(pos.X,pos.Y) - fovCircle.Position).Magnitude
+                            if d < fov and d < dist then
+                                closest, dist = p.Character.Head, d
+                            end
+                        end
+                    end
+                end
+                if closest then
+                    camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
+                end
+            end
+            if fovCircle then fovCircle:Remove(); fovCircle = nil end
+        end)
+    else
+        if fovCircle then fovCircle:Remove() fovCircle = nil end
+    end
 end)
 
 Section:NewSlider("Aimbot FOV", "Adjust FOV", 500, 100, function(value)
-    fov = value
-    if fovCircle then fovCircle.Radius = value end
+    fov = value
+    if fovCircle then fovCircle.Radius = value end
 end)
 
 -- Hitbox Expander (Players only)
@@ -156,40 +170,40 @@ local hitboxSize = 5
 local hitboxEnabled = false
 
 Section:NewToggle("Hitbox Expander (Players)", "ขยายฮิตบ็อกซ์ผู้เล่น", function(state)
-    hitboxEnabled = state
+    hitboxEnabled = state
 end)
 
 Section:NewSlider("Hitbox Size", "ปรับขนาดฮิตบ็อกซ์", 500, 5, function(size)
-    hitboxSize = size
+    hitboxSize = size
 end)
 
 task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if hitboxEnabled then
-            for _, player in ipairs(game.Players:GetPlayers()) do
-                if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = player.Character.HumanoidRootPart
-                    hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                    hrp.Transparency = 0.7
-                    hrp.Material = Enum.Material.Neon
-                    hrp.Color = Color3.fromRGB(255, 0, 0)
-                    hrp.CanCollide = false
-                end
-            end
-        else
-            for _, player in ipairs(game.Players:GetPlayers()) do
-                if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = player.Character.HumanoidRootPart
-                    hrp.Size = Vector3.new(2, 2, 1)
-                    hrp.Transparency = 1
-                    hrp.Material = Enum.Material.Plastic
-                    hrp.Color = Color3.fromRGB(255, 255, 255)
-                    hrp.CanCollide = true
-                end
-            end
-        end
-    end
+    while true do
+        task.wait(0.1)
+        if hitboxEnabled then
+            for _, player in ipairs(game.Players:GetPlayers()) do
+                if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = player.Character.HumanoidRootPart
+                    hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                    hrp.Transparency = 0.7
+                    hrp.Material = Enum.Material.Neon
+                    hrp.Color = Color3.fromRGB(255, 0, 0)
+                    hrp.CanCollide = false
+                end
+            end
+        else
+            for _, player in ipairs(game.Players:GetPlayers()) do
+                if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = player.Character.HumanoidRootPart
+                    hrp.Size = Vector3.new(2, 2, 1)
+                    hrp.Transparency = 1
+                    hrp.Material = Enum.Material.Plastic
+                    hrp.Color = Color3.fromRGB(255, 255, 255)
+                    hrp.CanCollide = true
+                end
+            end
+        end
+    end
 end)
 
 -- ========================================================================
@@ -199,60 +213,67 @@ local TabSA = Window:NewTab("Silent Aimbot")
 local SectionSA = TabSA:NewSection("Silent Aimbot Settings")
 
 local function createSilentFOVCircle()
-    if silentFOVCircle then silentFOVCircle:Remove() end
-    silentFOVCircle = Drawing.new("Circle")
-    silentFOVCircle.Color = Color3.fromRGB(0,255,255)
-    silentFOVCircle.Thickness = 2
-    silentFOVCircle.Transparency = 0.5
-    silentFOVCircle.Radius = silentAimbotFOV
-    silentFOVCircle.Filled = false
-    silentFOVCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-    silentFOVCircle.Visible = true
+    if silentFOVCircle then silentFOVCircle:Remove() end
+    if not pcall(function() Drawing.new("Circle") end) then
+        warn("Drawing API ไม่รองรับใน Exploit นี้")
+        return
+    end
+    silentFOVCircle = Drawing.new("Circle")
+    silentFOVCircle.Color = Color3.fromRGB(0,255,255)
+    silentFOVCircle.Thickness = 2
+    silentFOVCircle.Transparency = 0.5
+    silentFOVCircle.Radius = silentAimbotFOV
+    silentFOVCircle.Filled = false
+    silentFOVCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+    silentFOVCircle.Visible = true
 
-    task.spawn(function()
-        while silentFOVCircle do
-            task.wait()
-            local hue = (tick() % 5) / 5
-            silentFOVCircle.Color = Color3.fromHSV(hue,1,1)
-            silentFOVCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-        end
-    end)
+    task.spawn(function()
+        while silentFOVCircle do
+            task.wait()
+            local hue = (tick() % 5) / 5
+            silentFOVCircle.Color = Color3.fromHSV(hue,1,1)
+            silentFOVCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+        end
+    end)
 end
 
 SectionSA:NewToggle("Enable Silent Aimbot", "", function(state)
-    silentAimbotEnabled = state
-    if state then
-        createSilentFOVCircle()
-    else
-        if silentFOVCircle then silentFOVCircle:Remove(); silentFOVCircle = nil end
-    end
+    silentAimbotEnabled = state
+    if state then
+        createSilentFOVCircle()
+    else
+        if silentFOVCircle then silentFOVCircle:Remove(); silentFOVCircle = nil end
+    end
 end)
 
 SectionSA:NewSlider("Silent Aimbot FOV", "Adjust FOV", 500, 100, function(value)
-    silentAimbotFOV = value
-    if silentFOVCircle then silentFOVCircle.Radius = value end
+    silentAimbotFOV = value
+    if silentFOVCircle then silentFOVCircle.Radius = value end
 end)
 
 task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if silentAimbotEnabled then
-            local closest, dist = nil, math.huge
-            for _, p in pairs(game.Players:GetPlayers()) do
-                if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
-                    local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
-                    if onScreen then
-                        local d = (Vector2.new(pos.X,pos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
-                        if d < silentAimbotFOV and d < dist then
-                            closest = p.Character.Head
-                            dist = d
-                        end
-                    end
-                end
-            end
-            silentTarget = closest
-        else
-            silentTarget = nil
-        end
-    end
+    while true do
+        task.wait(0.1)
+        if silentAimbotEnabled then
+            local closest, dist = nil, math.huge
+            for _, p in pairs(game.Players:GetPlayers()) do
+                if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+                    local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
+                    if onScreen then
+                        local d = (Vector2.new(pos.X,pos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
+                        if d < silentAimbotFOV and d < dist then
+                            closest = p.Character.Head
+                            dist = d
+                        end
+                    end
+                end
+            end
+            silentTarget = closest
+        else
+            silentTarget = nil
+        end
+    end
 end)
+
+-- (คุณสามารถเพิ่มฟีเจอร์อื่นๆ เช่น Auto Shoot หรือ Fly ใน Tab อื่นๆ ได้ตามต้องการ)
+
