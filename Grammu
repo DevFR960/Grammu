@@ -1,4 +1,4 @@
---// COCO HUB - FULL FEATURED SCRIPT (with Hitbox Expander)
+--// COCO HUB - FULL FEATURED SCRIPT (with Silent Aimbot + Hitbox Expander)
 
 -- โหลด Kavo UI Library แบบปลอดภัย
 local success, Library = pcall(function()
@@ -19,22 +19,18 @@ local TabPlayer = Window:NewTab("Player")
 local Section = TabPlayer:NewSection("Section Player!")
 
 local Plr = game.Players.LocalPlayer
-local drop
-local PlayerTP = nil
+local drop, PlayerTP = nil, nil
 local isMobile = game:GetService("UserInputService").TouchEnabled
 local camera = workspace.CurrentCamera
 
--- ตัวแปรสถานะ
 local highJump = false
 local speed = 16
 local aimbotEnabled = false
 local fov = 100
 local fovCircle = nil
 
-local silentAimbotEnabled = false
-local silentAimbotFOV = 100
-local silentTarget = nil
-local silentFOVCircle = nil
+local hitboxSize = 5
+local hitboxEnabled = false
 
 -- รีเฟรชรายชื่อผู้เล่น
 local function refreshPlayers()
@@ -57,9 +53,7 @@ Section:NewButton("Click To TP", "", function()
     end
 end)
 
-Section:NewButton("Refresh Dropdown", "Refreshes Dropdown", function()
-    refreshPlayers()
-end)
+Section:NewButton("Refresh Dropdown", "Refreshes Dropdown", refreshPlayers)
 
 Section:NewToggle("ESP", "Toggle ESP", function(state)
     _G.ESP = state
@@ -103,14 +97,10 @@ Section:NewSlider("Speed", "Adjust your speed", 100, 16, function(value)
     end
 end)
 
--- ฟังก์ชันสร้างวงกลม FOV สำหรับ Aimbot
+-- Aimbot วงกลม Rainbow
 local function createFOVCircle()
     if fovCircle then fovCircle:Remove() end
-    -- ตรวจสอบว่า Drawing API ใช้ได้ไหม
-    if not pcall(function() Drawing.new("Circle") end) then
-        warn("Drawing API ไม่รองรับใน Exploit นี้")
-        return
-    end
+    if not pcall(function() Drawing.new("Circle") end) then return end
     fovCircle = Drawing.new("Circle")
     fovCircle.Color = Color3.fromRGB(255,0,0)
     fovCircle.Thickness = 2
@@ -119,12 +109,10 @@ local function createFOVCircle()
     fovCircle.Filled = false
     fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
     fovCircle.Visible = true
-
     task.spawn(function()
         while fovCircle do
             task.wait()
-            local hue = (tick() % 5) / 5
-            fovCircle.Color = Color3.fromHSV(hue,1,1)
+            fovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
             fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
         end
     end)
@@ -156,7 +144,7 @@ Section:NewToggle("FOV Aimbot with Rainbow Circle", "Enable/disable", function(s
             if fovCircle then fovCircle:Remove(); fovCircle = nil end
         end)
     else
-        if fovCircle then fovCircle:Remove() fovCircle = nil end
+        if fovCircle then fovCircle:Remove(); fovCircle = nil end
     end
 end)
 
@@ -164,10 +152,6 @@ Section:NewSlider("Aimbot FOV", "Adjust FOV", 500, 100, function(value)
     fov = value
     if fovCircle then fovCircle.Radius = value end
 end)
-
--- Hitbox Expander (Players only)
-local hitboxSize = 5
-local hitboxEnabled = false
 
 Section:NewToggle("Hitbox Expander (Players)", "ขยายฮิตบ็อกซ์ผู้เล่น", function(state)
     hitboxEnabled = state
@@ -180,21 +164,16 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.1)
-        if hitboxEnabled then
-            for _, player in ipairs(game.Players:GetPlayers()) do
-                if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = player.Character.HumanoidRootPart
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = player.Character.HumanoidRootPart
+                if hitboxEnabled then
                     hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
                     hrp.Transparency = 0.7
                     hrp.Material = Enum.Material.Neon
                     hrp.Color = Color3.fromRGB(255, 0, 0)
                     hrp.CanCollide = false
-                end
-            end
-        else
-            for _, player in ipairs(game.Players:GetPlayers()) do
-                if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = player.Character.HumanoidRootPart
+                else
                     hrp.Size = Vector3.new(2, 2, 1)
                     hrp.Transparency = 1
                     hrp.Material = Enum.Material.Plastic
@@ -212,12 +191,14 @@ end)
 local TabSA = Window:NewTab("Silent Aimbot")
 local SectionSA = TabSA:NewSection("Silent Aimbot Settings")
 
+local silentAimbotEnabled = false
+local silentAimbotFOV = 100
+local silentFOVCircle = nil
+local silentTarget = nil
+
 local function createSilentFOVCircle()
     if silentFOVCircle then silentFOVCircle:Remove() end
-    if not pcall(function() Drawing.new("Circle") end) then
-        warn("Drawing API ไม่รองรับใน Exploit นี้")
-        return
-    end
+    if not pcall(function() Drawing.new("Circle") end) then return end
     silentFOVCircle = Drawing.new("Circle")
     silentFOVCircle.Color = Color3.fromRGB(0,255,255)
     silentFOVCircle.Thickness = 2
@@ -226,12 +207,10 @@ local function createSilentFOVCircle()
     silentFOVCircle.Filled = false
     silentFOVCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
     silentFOVCircle.Visible = true
-
     task.spawn(function()
         while silentFOVCircle do
             task.wait()
-            local hue = (tick() % 5) / 5
-            silentFOVCircle.Color = Color3.fromHSV(hue,1,1)
+            silentFOVCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
             silentFOVCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
         end
     end)
@@ -274,6 +253,3 @@ task.spawn(function()
         end
     end
 end)
-
--- (คุณสามารถเพิ่มฟีเจอร์อื่นๆ เช่น Auto Shoot หรือ Fly ใน Tab อื่นๆ ได้ตามต้องการ)
-
