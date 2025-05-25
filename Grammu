@@ -1,130 +1,163 @@
--- โหลด Kavo UI
+--// COCO HUB - FULL FEATURED SCRIPT
+
+-- โหลด Kavo UI Library
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 local Window = Library.CreateLib("COCO HUB", "DarkTheme")
-local Tab = Window:NewTab("Player")
-local Section = Tab:NewSection("Section Player!")
 
--- ตัวแปรหลัก
+-- ========================================================================
+-- TAB: Player
+-- ========================================================================
+local TabPlayer = Window:NewTab("Player")
+local Section = TabPlayer:NewSection("Section Player!")
+
 local Plr = game.Players.LocalPlayer
 local drop
 local PlayerTP = nil
+local isMobile = game:GetService("UserInputService").TouchEnabled
+local camera = workspace.CurrentCamera
+
+-- ตัวแปรสถานะต่าง ๆ
 local noclip = false
 local highJump = false
 local hitboxEnabled = false
-local hitboxSize = Vector3.new(5, 5, 5)
+local hitboxSize = Vector3.new(5,5,5)
 local speed = 16
 local aimbotEnabled = false
 local fov = 100
 local fovCircle = nil
-local camera = workspace.CurrentCamera
-local isMobile = game:GetService("UserInputService").TouchEnabled
+local objectHitboxEnabled = false
+local objectHitboxSize = Vector3.new(5,5,5)
+local selectedObjectClass = "Part"
+
+local invisibilityEnabled = false
+local flyEnabled = false
+local flySpeed = 50
+
+-- TweenService (ใช้ได้ถ้ามี animation)
 local TweenService = game:GetService("TweenService")
 
--- FOV Circle
+-- ฟังก์ชันสร้าง Rainbow FOV Circle
 local function createFOVCircle()
     if fovCircle then fovCircle:Remove() end
     fovCircle = Drawing.new("Circle")
-    fovCircle.Color = Color3.fromRGB(255, 0, 0)
+    fovCircle.Color = Color3.fromRGB(255,0,0)
     fovCircle.Thickness = 2
     fovCircle.Transparency = 0.5
     fovCircle.Radius = fov
     fovCircle.Filled = false
-    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
     fovCircle.Visible = true
 
     task.spawn(function()
         while fovCircle do
             task.wait()
-            local tickTime = tick() % 5
-            local hue = tickTime / 5
-            fovCircle.Color = Color3.fromHSV(hue, 1, 1)
-            fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+            local hue = (tick() % 5) / 5
+            fovCircle.Color = Color3.fromHSV(hue,1,1)
+            fovCircle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
         end
     end)
 end
 
--- Player List
+-- ฟังก์ชันรีเฟรชรายชื่อผู้เล่น
 local function refreshPlayers()
-    Plr = {}
+    local list = {}
     for _, v in pairs(game.Players:GetPlayers()) do
-        table.insert(Plr, v.Name)
+        table.insert(list, v.Name)
     end
-    if drop then drop:Refresh(Plr) end
+    if drop then drop:Refresh(list) end
 end
-
 refreshPlayers()
 
-drop = Section:NewDropdown("Select Player!", "Click To Select", Plr, function(t)
+-- Dropdown เลือกผู้เล่น
+drop = Section:NewDropdown("Select Player!", "Click To Select", {}, function(t)
     PlayerTP = t
 end)
+refreshPlayers()
 
+-- ปุ่ม TP
 Section:NewButton("Click To TP", "", function()
     local target = game.Players:FindFirstChild(PlayerTP)
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+        Plr.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
     end
 end)
 
+-- ปุ่มรีเฟรช dropdown
 Section:NewButton("Refresh Dropdown", "Refreshes Dropdown", function()
     refreshPlayers()
 end)
 
+-- Toggle ESP
 Section:NewToggle("ESP", "Toggle ESP", function(state)
     _G.ESP = state
-    local localPlrName = game.Players.LocalPlayer.Name
-    while _G.ESP do
-        task.wait(0.1)
-        for _, v in pairs(game.Players:GetPlayers()) do
-            if v.Name ~= localPlrName and v.Character and not v.Character:FindFirstChild("ESP") then
-                local hl = Instance.new("Highlight")
-                hl.Name = "ESP"
-                hl.FillColor = Color3.new(0, 1, 0.08)
-                hl.OutlineColor = Color3.new(0.9, 1, 0)
-                hl.FillTransparency = 0.5
-                hl.Adornee = v.Character
-                hl.Parent = v.Character
-            elseif not _G.ESP and v.Character and v.Character:FindFirstChild("ESP") then
-                v.Character:FindFirstChild("ESP"):Destroy()
+    local localName = Plr.Name
+    task.spawn(function()
+        while _G.ESP do
+            task.wait(0.1)
+            for _, v in pairs(game.Players:GetPlayers()) do
+                if v.Name ~= localName and v.Character then
+                    if not v.Character:FindFirstChild("ESP") then
+                        local hl = Instance.new("Highlight", v.Character)
+                        hl.Name = "ESP"
+                        hl.FillColor = Color3.new(0,1,0.08)
+                        hl.OutlineColor = Color3.new(0.9,1,0)
+                        hl.FillTransparency = 0.5
+                        hl.Adornee = v.Character
+                    end
+                end
             end
         end
-    end
+        for _, v in pairs(game.Players:GetPlayers()) do
+            if v.Character and v.Character:FindFirstChild("ESP") then
+                v.Character.ESP:Destroy()
+            end
+        end
+    end)
 end)
 
+-- Toggle NoClip (Hold E)
 Section:NewToggle("NoClip (Hold E)", "Walk through walls", function(state)
     noclip = state
-    local plr = game.Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
+    local char = Plr.Character or Plr.CharacterAdded:Wait()
     local uis = game:GetService("UserInputService")
 
     task.spawn(function()
         while noclip do
             task.wait()
             if not isMobile and uis:IsKeyDown(Enum.KeyCode.E) then
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = false end
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
                 end
             else
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = true end
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = true end
                 end
             end
         end
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
+        for _, p in pairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = true end
         end
     end)
 end)
 
+-- Toggle High Jump
 Section:NewToggle("High Jump", "Enable high jump", function(state)
     highJump = state
-    local humanoid = game.Players.LocalPlayer.Character:WaitForChild("Humanoid")
-    humanoid.JumpPower = highJump and 100 or 50
+    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.JumpPower = highJump and 100 or 50
+    end
 end)
 
+-- Slider Speed
 Section:NewSlider("Speed", "Adjust your speed", 100, 16, function(value)
-    game.Players.LocalPlayer.Character:WaitForChild("Humanoid").WalkSpeed = value
+    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.WalkSpeed = value
+    end
 end)
 
+-- Toggle Aimbot + Rainbow FOV
 Section:NewToggle("FOV Aimbot with Rainbow Circle", "Enable/disable", function(state)
     aimbotEnabled = state
     if state then
@@ -132,142 +165,269 @@ Section:NewToggle("FOV Aimbot with Rainbow Circle", "Enable/disable", function(s
         task.spawn(function()
             while aimbotEnabled do
                 task.wait(0.1)
-                local closestPlayer, shortestDistance = nil, math.huge
-                for _, player in pairs(game.Players:GetPlayers()) do
-                    if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-                        local head = player.Character.Head
-                        local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                local closest, dist = nil, math.huge
+                for _, p in pairs(game.Players:GetPlayers()) do
+                    if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+                        local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
                         if onScreen then
-                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovCircle.Position).Magnitude
-                            if distance < fov and distance < shortestDistance then
-                                closestPlayer = head
-                                shortestDistance = distance
+                            local d = (Vector2.new(pos.X,pos.Y) - fovCircle.Position).Magnitude
+                            if d < fov and d < dist then
+                                closest, dist = p.Character.Head, d
                             end
                         end
                     end
                 end
-                if closestPlayer then
-                    camera.CFrame = CFrame.new(camera.CFrame.Position, closestPlayer.Position)
+                if closest then
+                    camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
                 end
             end
+            if fovCircle then fovCircle:Remove(); fovCircle = nil end
         end)
     else
-        if fovCircle then
-            fovCircle:Remove()
-            fovCircle = nil
-        end
+        if fovCircle then fovCircle:Remove(); fovCircle = nil end
     end
 end)
 
+-- Toggle Hitbox Expander (Players)
 Section:NewToggle("Hitbox Expander", "เปิด/ปิด", function(state)
     hitboxEnabled = state
-    if hitboxEnabled then
-        task.spawn(function()
-            while hitboxEnabled do
-                task.wait(0.1)
-                for _, player in pairs(game.Players:GetPlayers()) do
-                    if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                        local hrp = player.Character.HumanoidRootPart
-                        hrp.Size = hitboxSize
-                        hrp.Transparency = 0.5
-                        hrp.Material = Enum.Material.Neon
-                        hrp.Color = Color3.fromRGB(255, 0, 0)
-                        hrp.CanCollide = false
-                    end
+    task.spawn(function()
+        while hitboxEnabled do
+            task.wait(0.1)
+            for _, p in pairs(game.Players:GetPlayers()) do
+                if p ~= Plr and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = p.Character.HumanoidRootPart
+                    hrp.Size = hitboxSize
+                    hrp.Transparency = 0.5
+                    hrp.Material = Enum.Material.Neon
+                    hrp.Color = Color3.fromRGB(255,0,0)
+                    hrp.CanCollide = false
                 end
             end
-        end)
-    else
-        for _, player in pairs(game.Players:GetPlayers()) do
-            if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = player.Character.HumanoidRootPart
-                hrp.Size = Vector3.new(2, 2, 1)
+        end
+        for _, p in pairs(game.Players:GetPlayers()) do
+            if p ~= Plr and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = p.Character.HumanoidRootPart
+                hrp.Size = Vector3.new(2,2,1)
                 hrp.Transparency = 0
                 hrp.Material = Enum.Material.Plastic
                 hrp.CanCollide = true
             end
         end
-    end
+    end)
 end)
 
+-- Slider ขนาด Hitbox (Players)
 Section:NewSlider("ขนาด Hitbox", "ปรับขนาดกล่องฮิตบอกซ์", 20, 2, function(value)
-    hitboxSize = Vector3.new(value, value, value)
+    hitboxSize = Vector3.new(value,value,value)
 end)
 
--- ระบบ END
-Section:NewButton("END (ปิด GUI และหยุดระบบ)", "หยุดการทำงานทั้งหมดและปิด GUI", function()
-    -- ปิด ESP
-    _G.ESP = false
-    for _, v in pairs(game.Players:GetPlayers()) do
-        if v.Character and v.Character:FindFirstChild("ESP") then
-            v.Character:FindFirstChild("ESP"):Destroy()
+-- Toggle Hitbox Expander (Objects)
+Section:NewToggle("Hitbox ของสิ่งของ", "เปิด/ปิดการขยายฮิตบอกซ์ของสิ่งของ", function(state)
+    objectHitboxEnabled = state
+    task.spawn(function()
+        while objectHitboxEnabled do
+            task.wait(0.5)
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if selectedObjectClass and obj.ClassName == selectedObjectClass then
+                    if obj:IsA("BasePart") then
+                        obj.Size = objectHitboxSize
+                        obj.Transparency = 0.5
+                        obj.Material = Enum.Material.Neon
+                        obj.CanCollide = false
+                    end
+                end
+            end
+        end
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if selectedObjectClass and obj.ClassName == selectedObjectClass and obj:IsA("BasePart") then
+                obj.Size = Vector3.new(1,1,1)
+                obj.Transparency = 0
+                obj.Material = Enum.Material.Plastic
+                obj.CanCollide = true
+            end
+        end
+    end)
+end)
+
+-- Dropdown เลือกชนิดสิ่งของสำหรับ Hitbox
+Section:NewDropdown("เลือกชนิดสิ่งของ", "เลือกคลาสของสิ่งของ", {"Part","MeshPart","UnionOperation","WedgePart"}, function(val)
+    selectedObjectClass = val
+end)
+
+-- Slider ขนาด Hitbox ของสิ่งของ
+Section:NewSlider("ขนาด Hitbox ของสิ่งของ", "ปรับขนาด", 20, 1, function(value)
+    objectHitboxSize = Vector3.new(value,value,value)
+end)
+
+-- Toggle Fly (บิน)
+Section:NewToggle("Fly", "บินได้ทั้ง PC และ Mobile", function(state)
+    flyEnabled = state
+    local char = Plr.Character or Plr.CharacterAdded:Wait()
+    local humanoidRootPart = char:WaitForChild("HumanoidRootPart")
+    local uis = game:GetService("UserInputService")
+
+    if state then
+        local bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.P = 9e4
+        bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.CFrame = humanoidRootPart.CFrame
+        bodyGyro.Parent = humanoidRootPart
+
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Velocity = Vector3.new(0,0,0)
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVelocity.Parent = humanoidRootPart
+
+        local function fly()
+            local speed = flySpeed
+            while flyEnabled do
+                task.wait()
+                local moveVec = Vector3.new()
+                if isMobile then
+                    -- Mobile movement control can be improved later
+                    -- For now no control
+                else
+                    if uis:IsKeyDown(Enum.KeyCode.W) then moveVec = moveVec + (workspace.CurrentCamera.CFrame.LookVector) end
+                    if uis:IsKeyDown(Enum.KeyCode.S) then moveVec = moveVec - (workspace.CurrentCamera.CFrame.LookVector) end
+                    if uis:IsKeyDown(Enum.KeyCode.A) then moveVec = moveVec - (workspace.CurrentCamera.CFrame.RightVector) end
+                    if uis:IsKeyDown(Enum.KeyCode.D) then moveVec = moveVec + (workspace.CurrentCamera.CFrame.RightVector) end
+                    if uis:IsKeyDown(Enum.KeyCode.Space) then moveVec = moveVec + Vector3.new(0,1,0) end
+                    if uis:IsKeyDown(Enum.KeyCode.LeftShift) then moveVec = moveVec - Vector3.new(0,1,0) end
+                end
+                bodyVelocity.Velocity = moveVec.Unit * speed
+                bodyGyro.CFrame = workspace.CurrentCamera.CFrame
+            end
+            bodyVelocity:Destroy()
+            bodyGyro:Destroy()
+        end
+        task.spawn(fly)
+    else
+        if char:FindFirstChild("HumanoidRootPart") then
+            for _, v in pairs(char.HumanoidRootPart:GetChildren()) do
+                if v:IsA("BodyGyro") or v:IsA("BodyVelocity") then
+                    v:Destroy()
+                end
+            end
         end
     end
+end)
 
-    -- ปิด Aimbot
+-- Slider Fly Speed
+Section:NewSlider("Fly Speed", "ปรับความเร็วบิน", 500, 50, function(value)
+    flySpeed = value
+end)
+
+-- Toggle Invisibility
+Section:NewToggle("Invisible", "ล่องหน", function(state)
+    invisibilityEnabled = state
+    local char = Plr.Character or Plr.CharacterAdded:Wait()
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            part.Transparency = state and 1 or 0
+        end
+        if part:IsA("ParticleEmitter") or part:IsA("Trail") then
+            part.Enabled = not state
+        end
+    end
+end)
+
+-- END Button (ปิด GUI และระบบทั้งหมด)
+local TabSettings = Window:NewTab("Settings")
+local SectionSettings = TabSettings:NewSection("Settings")
+
+SectionSettings:NewButton("END", "ปิด GUI และระบบทั้งหมด", function()
+    -- ปิด GUI
+    Library:Close()
+    -- ปิดระบบทั้งหมดที่เปิดไว้
     aimbotEnabled = false
-    if fovCircle then
-        fovCircle:Remove()
-        fovCircle = nil
-    end
-
-    -- ปิด Hitbox Expander
-    hitboxEnabled = false
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = player.Character.HumanoidRootPart
-            hrp.Size = Vector3.new(2, 2, 1)
-            hrp.Transparency = 0
-            hrp.Material = Enum.Material.Plastic
-            hrp.CanCollide = true
-        end
-    end
-
-    -- ปิด High Jump
-    highJump = false
-    local humanoid = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        humanoid.JumpPower = 50
-    end
-
-    -- ปิด NoClip
+    _G.ESP = false
     noclip = false
-    local char = game.Players.LocalPlayer.Character
-    if char then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
-        end
-    end
-
-    -- รีเซ็ต Speed
+    highJump = false
+    hitboxEnabled = false
+    objectHitboxEnabled = false
+    invisibilityEnabled = false
+    flyEnabled = false
+    -- รีเซ็ตสถานะ humanoid walkspeed, jumppower
+    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
     if humanoid then
         humanoid.WalkSpeed = 16
+        humanoid.JumpPower = 50
     end
-
-    -- ปิด GUI
-    local gui = game.CoreGui:FindFirstChild("KavoUI")
-    if gui then
-        gui:Destroy()
-    end
-
-    -- เคลียร์ตัวแปร
-    Plr = {}
-    PlayerTP = nil
-    drop = nil
 end)
 
--- GUI Toggle (PC & Mobile)
-local UIS = game:GetService("UserInputService")
-local gui = game.CoreGui:FindFirstChild("KavoUI")
+-- ========================================================================
+-- เพิ่มระบบ Silent Aimbot (Lock Box, ไม่ขยับกล้อง)
+-- ========================================================================
 
-local function toggleGUI()
-    if gui then
-        gui.Enabled = not gui.Enabled
+local silentAimbotEnabled = false
+local silentAimbotFOV = 100
+
+local function silentAimbot()
+    while silentAimbotEnabled do
+        task.wait(0.1)
+        local cam = workspace.CurrentCamera
+        local closestPart = nil
+        local closestDist = math.huge
+
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= Plr and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("HumanoidRootPart") then
+                local headPos = player.Character.Head.Position
+                local screenPos, onScreen = cam:WorldToViewportPoint(headPos)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)).Magnitude
+                    if dist < silentAimbotFOV and dist < closestDist then
+                        closestPart = player.Character.HumanoidRootPart
+                        closestDist = dist
+                    end
+                end
+            end
+        end
+
+        if closestPart then
+            -- สร้างกล่องล็อกเป้า (BillboardGui)
+            if not Plr.Character.Head:FindFirstChild("SilentAimBox") then
+                local box = Instance.new("BillboardGui")
+                box.Name = "SilentAimBox"
+                box.Adornee = closestPart
+                box.Size = UDim2.new(0, 50, 0, 50)
+                box.AlwaysOnTop = true
+                box.Parent = Plr.Character.Head
+
+                local frame = Instance.new("Frame")
+                frame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                frame.Size = UDim2.new(1, 0, 1, 0)
+                frame.BorderSizePixel = 0
+                frame.BackgroundTransparency = 0.5
+                frame.Parent = box
+            else
+                local boxGui = Plr.Character.Head.SilentAimBox
+                boxGui.Adornee = closestPart
+            end
+        else
+            if Plr.Character.Head:FindFirstChild("SilentAimBox") then
+                Plr.Character.Head.SilentAimBox:Destroy()
+            end
+        end
+    end
+    if Plr.Character and Plr.Character:FindFirstChild("Head") and Plr.Character.Head:FindFirstChild("SilentAimBox") then
+        Plr.Character.Head.SilentAimBox:Destroy()
     end
 end
 
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.RightControl and not gameProcessed then
-        toggleGUI()
+-- Toggle Silent Aimbot
+Section:NewToggle("Silent Aimbot (Lock Box)", "ล็อกเป้าแบบกล่องไม่หมุนกล้อง", function(state)
+    silentAimbotEnabled = state
+    if state then
+        task.spawn(silentAimbot)
+    else
+        if Plr.Character and Plr.Character:FindFirstChild("Head") and Plr.Character.Head:FindFirstChild("SilentAimBox") then
+            Plr.Character.Head.SilentAimBox:Destroy()
+        end
     end
+end)
+
+-- Slider Silent Aimbot FOV
+Section:NewSlider("Silent Aimbot FOV", "ขนาดพื้นที่ล็อกเป้า", 200, 100, function(value)
+    silentAimbotFOV = value
 end)
