@@ -1,4 +1,4 @@
---// COCO HUB - FINAL VERSION (Rayfield UI + Silent Aimbot + Auto Shoot + Hitbox + END + Debug + Loader Check)
+--// COCO HUB - FINAL FIXED VERSION
 
 -- โหลด Rayfield UI
 local success, Rayfield = pcall(function()
@@ -10,12 +10,13 @@ if not success or not Rayfield then
     return
 end
 
+-- บริการหลัก
 local Players = game:GetService("Players")
 local Plr = Players.LocalPlayer
 repeat task.wait() until Plr and Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
-
 local camera = workspace.CurrentCamera
 
+-- สร้างหน้าต่าง
 local Window = Rayfield:CreateWindow({
     Name = "COCO HUB",
     LoadingTitle = "COCO HUB",
@@ -42,6 +43,7 @@ local fovCircle, silentTarget = nil, nil
 local silentAimbotEnabled, silentAimbotFOV = false, 100
 local ESPEnabled = false
 local silentAimbotLoop, autoShootLoop = nil, nil
+local silentFovCircle = nil
 
 -- ฟังก์ชันรีเฟรชผู้เล่น
 local function refreshPlayers()
@@ -52,11 +54,11 @@ local function refreshPlayers()
     return list
 end
 
--- สร้าง Tab
+-- TAB PLAYER
 local Tab = Window:CreateTab("Player", 4483362458)
 Tab:CreateSection("Player Tools")
 
--- Dropdown ผู้เล่น
+-- Dropdown เลือกผู้เล่น
 local drop = Tab:CreateDropdown({
     Name = "Select Player",
     Options = refreshPlayers(),
@@ -67,34 +69,21 @@ local drop = Tab:CreateDropdown({
     end
 })
 
--- ปุ่มวาร์ป
 Tab:CreateButton({
     Name = "Teleport to Player",
     Callback = function()
-        if not PlayerTP then
-            warn("⚠️ กรุณาเลือกผู้เล่นก่อนวาร์ป")
-            return
-        end
-
+        if not PlayerTP then return warn("⚠️ กรุณาเลือกผู้เล่นก่อนวาร์ป") end
         local target = Players:FindFirstChild(PlayerTP)
-        if not target then
-            warn("❌ ไม่พบผู้เล่น: " .. PlayerTP)
-            return
-        end
-
+        if not target then return warn("❌ ไม่พบผู้เล่น: " .. PlayerTP) end
         local myHRP = Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
         local targetHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-
         if myHRP and targetHRP then
             myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
             print("[Debug] วาร์ปไปยัง: " .. PlayerTP)
-        else
-            warn("❌ ไม่พบ HRP ของคุณหรือเป้าหมาย")
         end
     end
 })
 
--- รีเฟรชรายชื่อ
 Tab:CreateButton({
     Name = "Refresh Player List",
     Callback = function()
@@ -126,6 +115,7 @@ Tab:CreateToggle({
                         end
                     end
                 end
+                -- ลบ ESP ทุกตัวเมื่อปิด toggle
                 for _, v in pairs(Players:GetPlayers()) do
                     if v.Character and v.Character:FindFirstChild("ESP") then
                         v.Character.ESP:Destroy()
@@ -149,13 +139,11 @@ Tab:CreateToggle({
     Callback = function(state)
         highJump = state
         local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-        if hum then
-            hum.JumpPower = state and 100 or 50
-        end
+        if hum then hum.JumpPower = state and 100 or 50 end
     end
 })
 
--- Speed
+-- WalkSpeed
 Tab:CreateSlider({
     Name = "WalkSpeed",
     Range = {16, 100},
@@ -167,7 +155,7 @@ Tab:CreateSlider({
     end
 })
 
--- Aimbot + FOV
+-- Aimbot (FOV)
 Tab:CreateToggle({
     Name = "Aimbot (FOV + Rainbow)",
     CurrentValue = false,
@@ -202,10 +190,10 @@ Tab:CreateToggle({
                         camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
                     end
                 end
-                if fovCircle then fovCircle:Destroy() end
+                if fovCircle then fovCircle:Destroy() fovCircle = nil end
             end)
         else
-            if fovCircle then fovCircle:Destroy() end
+            if fovCircle then fovCircle:Destroy() fovCircle = nil end
         end
     end
 })
@@ -228,6 +216,23 @@ Tab:CreateToggle({
     Callback = function(state)
         silentAimbotEnabled = state
         if state then
+            -- วงกลมสายรุ้ง Silent Aimbot
+            silentFovCircle = Drawing.new("Circle")
+            silentFovCircle.Thickness = 2
+            silentFovCircle.Transparency = 0.5
+            silentFovCircle.Filled = false
+            silentFovCircle.Radius = silentAimbotFOV
+            silentFovCircle.Visible = true
+
+            task.spawn(function()
+                while silentAimbotEnabled do
+                    task.wait()
+                    silentFovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                    silentFovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+                end
+                if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
+            end)
+
             silentAimbotLoop = task.spawn(function()
                 while silentAimbotEnabled do
                     task.wait(0.1)
@@ -269,6 +274,9 @@ Tab:CreateToggle({
             end)
         else
             silentTarget = nil
+            if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
+            if silentAimbotLoop then task.cancel(silentAimbotLoop) silentAimbotLoop = nil end
+            if autoShootLoop then task.cancel(autoShootLoop) autoShootLoop = nil end
         end
     end
 })
@@ -280,6 +288,7 @@ Tab:CreateSlider({
     CurrentValue = 100,
     Callback = function(val)
         silentAimbotFOV = val
+        if silentFovCircle then silentFovCircle.Radius = val end
     end
 })
 
@@ -291,15 +300,15 @@ Window:CreateTab("END", 4483362458):CreateButton({
         silentAimbotEnabled = false
         ESPEnabled = false
         silentTarget = nil
-
-        if fovCircle then fovCircle:Destroy() end
-
+        if fovCircle then fovCircle:Destroy() fovCircle = nil end
+        if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
+        if silentAimbotLoop then task.cancel(silentAimbotLoop) silentAimbotLoop = nil end
+        if autoShootLoop then task.cancel(autoShootLoop) autoShootLoop = nil end
         for _, v in pairs(Players:GetPlayers()) do
             if v.Character and v.Character:FindFirstChild("ESP") then
                 v.Character.ESP:Destroy()
             end
         end
-
         print("[COCO HUB] ❌ ปิดทุกระบบแล้ว")
     end
 })
