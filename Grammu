@@ -65,12 +65,35 @@ drop = TabPlayer:CreateDropdown({
     end
 })
 
+-- แก้ไขระบบ TP ให้เช็คตัวละครและ HumanoidRootPart ก่อนวาป และพยายาม retry ถ้ายังไม่เจอ
 TabPlayer:CreateButton({
     Name = "Click To TP",
     Callback = function()
         local target = game.Players:FindFirstChild(PlayerTP)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            Plr.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+        if not target then
+            warn("Target player not found")
+            return
+        end
+        local function tryTP()
+            local plrChar = Plr.Character
+            local targetChar = target.Character
+            if plrChar and targetChar then
+                local hrp = plrChar:FindFirstChild("HumanoidRootPart")
+                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+                if hrp and targetHrp then
+                    hrp.CFrame = targetHrp.CFrame
+                    return true
+                end
+            end
+            return false
+        end
+        local tries = 0
+        while tries < 10 do
+            if tryTP() then
+                break
+            end
+            tries = tries + 1
+            task.wait(0.1)
         end
     end
 })
@@ -82,49 +105,78 @@ TabPlayer:CreateButton({
     end
 })
 
+-- ระบบ ESP
 TabPlayer:CreateToggle({
     Name = "ESP",
     CurrentValue = false,
     Callback = function(state)
         _G.ESP = state
         local localName = Plr.Name
-        task.spawn(function()
-            while _G.ESP do
-                task.wait(0.1)
-                for _, v in pairs(game.Players:GetPlayers()) do
-                    if v.Name ~= localName and v.Character then
-                        if not v.Character:FindFirstChild("ESP") then
-                            local hl = Instance.new("Highlight", v.Character)
-                            hl.Name = "ESP"
-                            hl.FillColor = Color3.new(0,1,0.08)
-                            hl.OutlineColor = Color3.new(0.9,1,0)
-                            hl.FillTransparency = 0.5
-                            hl.Adornee = v.Character
+        if state then
+            task.spawn(function()
+                while _G.ESP do
+                    task.wait(0.1)
+                    for _, v in pairs(game.Players:GetPlayers()) do
+                        if v.Name ~= localName and v.Character then
+                            if not v.Character:FindFirstChild("ESP") then
+                                local hl = Instance.new("Highlight")
+                                hl.Name = "ESP"
+                                hl.FillColor = Color3.new(0,1,0.08)
+                                hl.OutlineColor = Color3.new(0.9,1,0)
+                                hl.FillTransparency = 0.5
+                                hl.Adornee = v.Character
+                                hl.Parent = v.Character
+                            end
                         end
                     end
                 end
-            end
+            end)
+        else
+            -- ปิด ESP ลบ Highlight ทุกตัว
             for _, v in pairs(game.Players:GetPlayers()) do
-                if v.Character and v.Character:FindFirstChild("ESP") then
-                    v.Character.ESP:Destroy()
+                if v.Character then
+                    local hl = v.Character:FindFirstChild("ESP")
+                    if hl then
+                        hl:Destroy()
+                    end
                 end
             end
-        end)
+        end
     end
 })
+
+-- High Jump toggle พร้อมระบบรีเซ็ต JumpPower เวลาตัวละคร Respawn
+local function setJumpPower(value)
+    local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.JumpPower = value
+    end
+end
+
+local function onCharacterAdded(char)
+    if highJump then
+        setJumpPower(100)
+    else
+        setJumpPower(50)
+    end
+end
+
+Plr.CharacterAdded:Connect(onCharacterAdded)
 
 TabPlayer:CreateToggle({
     Name = "High Jump",
     CurrentValue = false,
     Callback = function(state)
         highJump = state
-        local humanoid = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.JumpPower = highJump and 100 or 50
+        if highJump then
+            setJumpPower(100)
+        else
+            setJumpPower(50)
         end
     end
 })
 
+-- Speed slider
 TabPlayer:CreateSlider({
     Name = "Speed",
     Range = {16, 100},
@@ -138,6 +190,7 @@ TabPlayer:CreateSlider({
     end
 })
 
+-- FOV Aimbot with Rainbow Circle
 TabPlayer:CreateToggle({
     Name = "FOV Aimbot with Rainbow Circle",
     CurrentValue = false,
@@ -192,6 +245,7 @@ TabPlayer:CreateSlider({
     end
 })
 
+-- Hitbox Expander toggle & slider
 TabPlayer:CreateToggle({
     Name = "Hitbox Expander (Players)",
     CurrentValue = false,
@@ -210,25 +264,27 @@ TabPlayer:CreateSlider({
     end
 })
 
--- Hitbox loop
+-- Hitbox Expander loop (แก้ให้เช็ค HumanoidRootPart ก่อนเปลี่ยน และรีเซ็ตให้ถูกต้อง)
 spawn(function()
     while true do
         task.wait(0.1)
         for _, player in ipairs(game.Players:GetPlayers()) do
-            if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = player.Character.HumanoidRootPart
-                if hitboxEnabled then
-                    hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                    hrp.Transparency = 0.7
-                    hrp.Material = Enum.Material.Neon
-                    hrp.Color = Color3.fromRGB(255, 0, 0)
-                    hrp.CanCollide = false
-                else
-                    hrp.Size = Vector3.new(2, 2, 1)
-                    hrp.Transparency = 1
-                    hrp.Material = Enum.Material.Plastic
-                    hrp.Color = Color3.fromRGB(255, 255, 255)
-                    hrp.CanCollide = true
+            if player ~= Plr and player.Character then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if hitboxEnabled then
+                        hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                        hrp.Transparency = 0.7
+                        hrp.Material = Enum.Material.Neon
+                        hrp.Color = Color3.fromRGB(255, 0, 0)
+                        hrp.CanCollide = false
+                    else
+                        hrp.Size = Vector3.new(2, 2, 1)
+                        hrp.Transparency = 1
+                        hrp.Material = Enum.Material.Plastic
+                        hrp.Color = Color3.fromRGB(255, 255, 255)
+                        hrp.CanCollide = true
+                    end
                 end
             end
         end
