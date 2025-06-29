@@ -2,36 +2,39 @@
 
 -- Load Rayfield UI
 local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 end)
 
 if not success or not Rayfield then
-    warn("❌ Failed to load Rayfield UI. Check your internet connection.")
-    return
+    warn("❌ Failed to load Rayfield UI. Check your internet connection.")
+    return
 end
+print("[COCO HUB] Rayfield UI loaded successfully.")
 
 local Players = game:GetService("Players")
 local Plr = Players.LocalPlayer
 repeat task.wait() until Plr and Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
+print("[COCO HUB] LocalPlayer and Character loaded.")
+
 local camera = workspace.CurrentCamera
 
 -- Main Window
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB",
-    LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "by Developer",
-    ConfigurationSaving = { Enabled = false },
-    Discord = { Enabled = false },
-    KeySystem = true,
-    KeySettings = {
-        Title = "COCO HUB KEY",
-        Subtitle = "Pass Key",
-        Note = "POSS NGO",
-        FileName = "COCOHUBKEY",
-        SaveKey = false,
-        GrabKeyFromSite = false,
-        Key = "Flower"
-    }
+    Name = "COCO HUB",
+    LoadingTitle = "COCO HUB",
+    LoadingSubtitle = "by Developer",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = true,
+    KeySettings = {
+        Title = "COCO HUB KEY",
+        Subtitle = "Pass Key",
+        Note = "POSS NGO",
+        FileName = "COCOHUBKEY",
+        SaveKey = false,
+        GrabKeyFromSite = false,
+        Key = "Flower"
+    }
 })
 
 -- Variables
@@ -41,7 +44,7 @@ local fov, hitboxSize = 100, 5
 local fovCircle, silentTarget = nil, nil
 local silentAimbotEnabled, silentAimbotFOV = false, 100
 local ESPEnabled = false
-local silentAimbotLoop = nil
+local silentAimbotLoop, aimbotLoop, ESPLoop, teamTagLoop = nil, nil, nil, nil
 local silentFovCircle, silentESP = nil, nil
 local walkSpeedVal = 16
 local walkSpeedToggle = false
@@ -49,381 +52,408 @@ local walkSpeedToggle = false
 local TeamTagEnabled = false
 local TeamTags = {}
 
--- Refresh player list for dropdown
+-- Helper Functions --
+
 local function refreshPlayers()
-    local list = {}
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= Plr then table.insert(list, v.Name) end
-    end
-    return list
+    local list = {}
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= Plr then table.insert(list, v.Name) end
+    end
+    return list
 end
 
--- Team Tag Functions (unchanged) ---
+-- Team Tag Functions --
+
 local function createTeamTag(player)
-    if not player.Character or not player.Character:FindFirstChild("Head") then return end
-    local head = player.Character.Head
+    if not player.Character or not player.Character:FindFirstChild("Head") then return end
+    local head = player.Character.Head
 
-    if player.Character:FindFirstChild("TeamTagGui") then
-        player.Character.TeamTagGui:Destroy()
-    end
+    if player.Character:FindFirstChild("TeamTagGui") then
+        player.Character.TeamTagGui:Destroy()
+    end
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "TeamTagGui"
-    billboard.Adornee = head
-    billboard.Size = UDim2.new(0, 100, 0, 30)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = player.Character
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "TeamTagGui"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = player.Character
 
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.TextColor3 = Color3.new(1, 1, 1)
-    textLabel.TextStrokeTransparency = 0
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.TextScaled = true
-    textLabel.Parent = billboard
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextScaled = true
+    textLabel.Parent = billboard
 
-    if TeamTags[player] then
-        task.cancel(TeamTags[player])
-        TeamTags[player] = nil
-    end
+    if TeamTags[player] then
+        task.cancel(TeamTags[player])
+        TeamTags[player] = nil
+    end
 
-    TeamTags[player] = task.spawn(function()
-        while TeamTagEnabled and player.Parent do
-            if player.Character and player.Character:FindFirstChild("Head") then
-                local team = player.Team
-                if team then
-                    textLabel.Text = team.Name
-                    textLabel.TextColor3 = team.TeamColor.Color
-                else
-                    textLabel.Text = "No Team"
-                    textLabel.TextColor3 = Color3.new(1, 1, 1)
-                end
-            else
-                if player.Character and player.Character:FindFirstChild("TeamTagGui") then
-                    player.Character.TeamTagGui:Destroy()
-                end
-                break
-            end
-            task.wait(0.5)
-        end
-        if player.Character and player.Character:FindFirstChild("TeamTagGui") then
-            player.Character.TeamTagGui:Destroy()
-        end
-    end)
+    TeamTags[player] = task.spawn(function()
+        while TeamTagEnabled and player.Parent do
+            if player.Character and player.Character:FindFirstChild("Head") then
+                local team = player.Team
+                if team then
+                    textLabel.Text = team.Name
+                    textLabel.TextColor3 = team.TeamColor.Color
+                else
+                    textLabel.Text = "No Team"
+                    textLabel.TextColor3 = Color3.new(1, 1, 1)
+                end
+            else
+                if player.Character and player.Character:FindFirstChild("TeamTagGui") then
+                    player.Character.TeamTagGui:Destroy()
+                end
+                break
+            end
+            task.wait(0.5)
+        end
+        if player.Character and player.Character:FindFirstChild("TeamTagGui") then
+            player.Character.TeamTagGui:Destroy()
+        end
+    end)
 end
 
 local function removeTeamTag(player)
-    if TeamTags[player] then
-        task.cancel(TeamTags[player])
-        TeamTags[player] = nil
-    end
-    if player.Character and player.Character:FindFirstChild("TeamTagGui") then
-        player.Character.TeamTagGui:Destroy()
-    end
+    if TeamTags[player] then
+        task.cancel(TeamTags[player])
+        TeamTags[player] = nil
+    end
+    if player.Character and player.Character:FindFirstChild("TeamTagGui") then
+        player.Character.TeamTagGui:Destroy()
+    end
 end
 
 local function refreshTeamTags(state)
-    TeamTagEnabled = state
-    if state then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= Plr then
-                createTeamTag(player)
-                player.CharacterAdded:Connect(function()
-                    if TeamTagEnabled then
-                        task.wait(1)
-                        createTeamTag(player)
-                    end
-                end)
-            end
-        end
-        Players.PlayerRemoving:Connect(function(player)
-            removeTeamTag(player)
-        end)
-    else
-        for _, player in pairs(Players:GetPlayers()) do
-            removeTeamTag(player)
-        end
-    end
+    TeamTagEnabled = state
+    if teamTagLoop then task.cancel(teamTagLoop) teamTagLoop = nil end
+    if state then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Plr then
+                createTeamTag(player)
+                player.CharacterAdded:Connect(function()
+                    if TeamTagEnabled then
+                        task.wait(1)
+                        createTeamTag(player)
+                    end
+                end)
+            end
+        end
+        Players.PlayerRemoving:Connect(function(player)
+            removeTeamTag(player)
+        end)
+        print("[COCO HUB] Team Tags Enabled.")
+    else
+        for _, player in pairs(Players:GetPlayers()) do
+            removeTeamTag(player)
+        end
+        print("[COCO HUB] Team Tags Disabled.")
+    end
 end
 
 -- Player Tab --
+
 local Tab = Window:CreateTab("Player", 4483362458)
 Tab:CreateSection("Player Tools")
 
 local drop = Tab:CreateDropdown({
-    Name = "Select Player",
-    Options = refreshPlayers(),
-    CurrentOption = nil,
-    Callback = function(t)
-        PlayerTP = t
-        print("[Debug] Selected player: " .. t)
-    end
+    Name = "Select Player",
+    Options = refreshPlayers(),
+    CurrentOption = nil,
+    Callback = function(t)
+        PlayerTP = t
+        print("[COCO HUB] Selected player: " .. t)
+    end
 })
 
 Tab:CreateButton({
-    Name = "Teleport to Player",
-    Callback = function()
-        if not PlayerTP then
-            return warn("⚠️ Please select a player before teleporting.")
-        end
+    Name = "Teleport to Player",
+    Callback = function()
+        if not PlayerTP then
+            return warn("[COCO HUB] ⚠️ Please select a player before teleporting.")
+        end
 
-        local target = Players:FindFirstChild(PlayerTP)
-        if not target then
-            warn("❌ Player not found: " .. PlayerTP)
-            return
-        end
+        local target = Players:FindFirstChild(PlayerTP)
+        if not target then
+            warn("[COCO HUB] ❌ Player not found: " .. PlayerTP)
+            return
+        end
 
-        local targetChar = target.Character or target.CharacterAdded:Wait()
-        local targetHRP = targetChar:WaitForChild("HumanoidRootPart", 5)
-        if not targetHRP then
-            warn("❌ Target character has no HumanoidRootPart.")
-            return
-        end
+        local targetChar = target.Character or target.CharacterAdded:Wait()
+        local targetHRP = targetChar:WaitForChild("HumanoidRootPart", 5)
+        if not targetHRP then
+            warn("[COCO HUB] ❌ Target character has no HumanoidRootPart.")
+            return
+        end
 
-        local myChar = Plr.Character or Plr.CharacterAdded:Wait()
-        local myHRP = myChar:WaitForChild("HumanoidRootPart", 5)
-        if not myHRP then
-            warn("❌ Your character has no HumanoidRootPart.")
-            return
-        end
+        local myChar = Plr.Character or Plr.CharacterAdded:Wait()
+        local myHRP = myChar:WaitForChild("HumanoidRootPart", 5)
+        if not myHRP then
+            warn("[COCO HUB] ❌ Your character has no HumanoidRootPart.")
+            return
+        end
 
-        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
-        print("[Debug] Teleported to: " .. PlayerTP)
-    end
+        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+        print("[COCO HUB] Teleported to: " .. PlayerTP)
+    end
 })
 
 Tab:CreateButton({
-    Name = "Refresh Player List",
-    Callback = function()
-        drop:SetOptions(refreshPlayers())
-        print("[Debug] Player list refreshed.")
-    end
+    Name = "Refresh Player List",
+    Callback = function()
+        drop:SetOptions(refreshPlayers())
+        print("[COCO HUB] Player list refreshed.")
+    end
 })
 
 Tab:CreateToggle({
-    Name = "ESP (Highlight)",
-    CurrentValue = ESPEnabled,
-    Callback = function(state)
-        ESPEnabled = state
-        if state then
-            task.spawn(function()
-                while ESPEnabled do
-                    task.wait(0.5)
-                    for _, v in pairs(Players:GetPlayers()) do
-                        if v ~= Plr and v.Character and not v.Character:FindFirstChild("ESP") then
-                            local hl = Instance.new("Highlight")
-                            hl.Name = "ESP"
-                            hl.FillColor = Color3.fromRGB(0, 255, 20)
-                            hl.OutlineColor = Color3.fromRGB(230, 255, 0)
-                            hl.FillTransparency = 0.5
-                            hl.OutlineTransparency = 0
-                            hl.Adornee = v.Character
-                            hl.Parent = v.Character
-                        end
-                    end
-                end
-                for _, v in pairs(Players:GetPlayers()) do
-                    if v.Character and v.Character:FindFirstChild("ESP") then
-                        v.Character.ESP:Destroy()
-                    end
-                end
-            end)
-        else
-            for _, v in pairs(Players:GetPlayers()) do
-                if v.Character and v.Character:FindFirstChild("ESP") then
-                    v.Character.ESP:Destroy()
-                end
-            end
-        end
-    end
+    Name = "ESP (Highlight)",
+    CurrentValue = ESPEnabled,
+    Callback = function(state)
+        ESPEnabled = state
+        if ESPLoop then task.cancel(ESPLoop) ESPLoop = nil end
+
+        if state then
+            ESPLoop = task.spawn(function()
+                while ESPEnabled do
+                    task.wait(0.5)
+                    for _, v in pairs(Players:GetPlayers()) do
+                        if v ~= Plr and v.Character and not v.Character:FindFirstChild("ESP") then
+                            local hl = Instance.new("Highlight")
+                            hl.Name = "ESP"
+                            hl.FillColor = Color3.fromRGB(0, 255, 20)
+                            hl.OutlineColor = Color3.fromRGB(230, 255, 0)
+                            hl.FillTransparency = 0.5
+                            hl.OutlineTransparency = 0
+                            hl.Adornee = v.Character
+                            hl.Parent = v.Character
+                        end
+                    end
+                end
+                for _, v in pairs(Players:GetPlayers()) do
+                    if v.Character and v.Character:FindFirstChild("ESP") then
+                        v.Character.ESP:Destroy()
+                    end
+                end
+            end)
+        else
+            for _, v in pairs(Players:GetPlayers()) do
+                if v.Character and v.Character:FindFirstChild("ESP") then
+                    v.Character.ESP:Destroy()
+                end
+            end
+            print("[COCO HUB] ESP Disabled.")
+        end
+    end
 })
 
 Tab:CreateToggle({
-    Name = "High Jump",
-    CurrentValue = highJumpEnabled,
-    Callback = function(state)
-        highJumpEnabled = state
-        local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-        if hum then
-            hum.JumpPower = state and 100 or 50
-        end
-    end
+    Name = "High Jump",
+    CurrentValue = highJumpEnabled,
+    Callback = function(state)
+        highJumpEnabled = state
+        local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+        if hum then
+            hum.JumpPower = state and 100 or 50
+            print("[COCO HUB] High Jump " .. (state and "Enabled" or "Disabled"))
+        end
+    end
 })
 
 Tab:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16, 100},
-    Increment = 1,
-    CurrentValue = walkSpeedVal,
-    Callback = function(val)
-        walkSpeedVal = val
-        if walkSpeedToggle then
-            local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-            if hum then hum.WalkSpeed = val end
-        end
-    end
+    Name = "WalkSpeed",
+    Range = {16, 100},
+    Increment = 1,
+    CurrentValue = walkSpeedVal,
+    Callback = function(val)
+        walkSpeedVal = val
+        if walkSpeedToggle then
+            local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+            if hum then hum.WalkSpeed = val end
+        end
+        print("[COCO HUB] WalkSpeed set to " .. val)
+    end
 })
 
 Tab:CreateToggle({
-    Name = "Enable WalkSpeed",
-    CurrentValue = walkSpeedToggle,
-    Callback = function(state)
-        walkSpeedToggle = state
-        local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-        if hum then
-            if state then
-                hum.WalkSpeed = walkSpeedVal
-            else
-                hum.WalkSpeed = 16
-            end
-        end
-    end
+    Name = "Enable WalkSpeed",
+    CurrentValue = walkSpeedToggle,
+    Callback = function(state)
+        walkSpeedToggle = state
+        local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+        if hum then
+            if state then
+                hum.WalkSpeed = walkSpeedVal
+                print("[COCO HUB] WalkSpeed Enabled")
+            else
+                hum.WalkSpeed = 16
+                print("[COCO HUB] WalkSpeed Disabled")
+            end
+        end
+    end
 })
 
--- Aimbot (FOV + Rainbow) unchanged here --
+-- Aimbot (FOV + Rainbow) --
 
 Tab:CreateToggle({
-    Name = "Aimbot (FOV + Rainbow)",
-    CurrentValue = aimbotEnabled,
-    Callback = function(state)
-        aimbotEnabled = state
-        if state then
-            fovCircle = Drawing.new("Circle")
-            fovCircle.Thickness = 2
-            fovCircle.Transparency = 0.5
-            fovCircle.Radius = fov
-            fovCircle.Filled = false
-            fovCircle.Visible = true
+    Name = "Aimbot (FOV + Rainbow)",
+    CurrentValue = aimbotEnabled,
+    Callback = function(state)
+        aimbotEnabled = state
+        if aimbotLoop then task.cancel(aimbotLoop) aimbotLoop = nil end
+        if state then
+            fovCircle = Drawing.new("Circle")
+            fovCircle.Thickness = 2
+            fovCircle.Transparency = 0.5
+            fovCircle.Radius = fov
+            fovCircle.Filled = false
+            fovCircle.Visible = true
 
-            task.spawn(function()
-                while aimbotEnabled do
-                    task.wait()
-                    fovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
-                    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                    local closest, dist = nil, math.huge
-                    for _, p in pairs(Players:GetPlayers()) do
-                        if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
-                            local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
-                            if onScreen then
-                                local d = (Vector2.new(pos.X, pos.Y) - fovCircle.Position).Magnitude
-                                if d < fov and d < dist then
-                                    closest, dist = p.Character.Head, d
-                                end
-                            end
-                        end
-                    end
-                    if closest then
-                        camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
-                    end
-                end
-                if fovCircle then fovCircle:Destroy() fovCircle = nil end
-            end)
-        else
-            if fovCircle then fovCircle:Destroy() fovCircle = nil end
-        end
-    end
+            aimbotLoop = task.spawn(function()
+                while aimbotEnabled do
+                    task.wait()
+                    fovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+                    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                    local closest, dist = nil, math.huge
+                    for _, p in pairs(Players:GetPlayers()) do
+                        if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+                            local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
+                            if onScreen then
+                                local d = (Vector2.new(pos.X, pos.Y) - fovCircle.Position).Magnitude
+                                if d < fov and d < dist then
+                                    closest, dist = p.Character.Head, d
+                                end
+                            end
+                        end
+                    end
+                    if closest then
+                        camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
+                    end
+                end
+                if fovCircle then fovCircle:Destroy() fovCircle = nil end
+            end)
+            print("[COCO HUB] Aimbot Enabled")
+        else
+            if fovCircle then fovCircle:Destroy() fovCircle = nil end
+            print("[COCO HUB] Aimbot Disabled")
+        end
+    end
 })
 
 Tab:CreateSlider({
-    Name = "FOV Radius",
-    Range = {100, 500},
-    Increment = 10,
-    CurrentValue = fov,
-    Callback = function(val)
-        fov = val
-        if fovCircle then fovCircle.Radius = val end
-    end
+    Name = "FOV Radius",
+    Range = {100, 500},
+    Increment = 10,
+    CurrentValue = fov,
+    Callback = function(val)
+        fov = val
+        if fovCircle then fovCircle.Radius = val end
+        print("[COCO HUB] FOV Radius set to " .. val)
+    end
 })
 
 -- Silent Aimbot (No Auto Shoot) --
+
 Tab:CreateToggle({
-    Name = "Silent Aimbot (No Auto Shoot)",
-    CurrentValue = silentAimbotEnabled,
-    Callback = function(state)
-        silentAimbotEnabled = state
-        if state then
-            silentFovCircle = Drawing.new("Circle")
-            silentFovCircle.Thickness = 2
-            silentFovCircle.Transparency = 0.5
-            silentFovCircle.Filled = false
-            silentFovCircle.Radius = silentAimbotFOV
-            silentFovCircle.Visible = true
+    Name = "Silent Aimbot (No Auto Shoot)",
+    CurrentValue = silentAimbotEnabled,
+    Callback = function(state)
+        silentAimbotEnabled = state
+        if silentAimbotLoop then task.cancel(silentAimbotLoop) silentAimbotLoop = nil end
+        if state then
+            silentFovCircle = Drawing.new("Circle")
+            silentFovCircle.Thickness = 2
+            silentFovCircle.Transparency = 0.5
+            silentFovCircle.Filled = false
+            silentFovCircle.Radius = silentAimbotFOV
+            silentFovCircle.Visible = true
 
-            task.spawn(function()
-                while silentAimbotEnabled do
-                    task.wait()
-                    silentFovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-                    silentFovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
-                end
-                if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
-            end)
+            task.spawn(function()
+                while silentAimbotEnabled do
+                    task.wait()
+                    silentFovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                    silentFovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+                end
+                if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
+            end)
 
-            silentAimbotLoop = task.spawn(function()
-                while silentAimbotEnabled do
-                    task.wait(0.1)
-                    local closest, dist = nil, math.huge
-                    for _, p in pairs(Players:GetPlayers()) do
-                        if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
-                            local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
-                            if onScreen then
-                                local d = (Vector2.new(pos.X, pos.Y) - Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)).Magnitude
-                                if d < silentAimbotFOV and d < dist then
-                                    closest, dist = p.Character.Head, d
-                                end
-                            end
-                        end
-                    end
-                    silentTarget = closest
+            silentAimbotLoop = task.spawn(function()
+                while silentAimbotEnabled do
+                    task.wait(0.1)
+                    local closest, dist = nil, math.huge
+                    for _, p in pairs(Players:GetPlayers()) do
+                        if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+                            local pos, onScreen = camera:WorldToViewportPoint(p.Character.Head.Position)
+                            if onScreen then
+                                local d = (Vector2.new(pos.X, pos.Y) - Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)).Magnitude
+                                if d < silentAimbotFOV and d < dist then
+                                    closest, dist = p.Character.Head, d
+                                end
+                            end
+                        end
+                    end
+                    silentTarget = closest
 
-                    -- Silent Aimbot ESP highlight on target
-                    if silentESP then silentESP:Destroy() silentESP = nil end
-                    if silentTarget and silentTarget:IsDescendantOf(workspace) then
-                        silentESP = Instance.new("Highlight")
-                        silentESP.Name = "SilentESP"
-                        silentESP.FillColor = Color3.fromRGB(255, 0, 0)
-                        silentESP.OutlineColor = Color3.fromRGB(255, 100, 100)
-                        silentESP.FillTransparency = 0.3
-                        silentESP.OutlineTransparency = 0
-                        silentESP.Adornee = silentTarget.Parent
-                        silentESP.Parent = silentTarget.Parent
-                    end
-                end
-            end)
-        else
-            silentTarget = nil
-            if silentESP then silentESP:Destroy() silentESP = nil end
-            if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
-            if silentAimbotLoop then task.cancel(silentAimbotLoop) silentAimbotLoop = nil end
-        end
-    end
+                    if silentESP then silentESP:Destroy() silentESP = nil end
+                    if silentTarget and silentTarget:IsDescendantOf(workspace) then
+                        silentESP = Instance.new("Highlight")
+                        silentESP.Name = "SilentESP"
+                        silentESP.FillColor = Color3.fromRGB(255, 0, 0)
+                        silentESP.OutlineColor = Color3.fromRGB(255, 100, 100)
+                        silentESP.FillTransparency = 0.3
+                        silentESP.OutlineTransparency = 0
+                        silentESP.Adornee = silentTarget.Parent
+                        silentESP.Parent = silentTarget.Parent
+                    end
+                end
+            end)
+            print("[COCO HUB] Silent Aimbot Enabled")
+        else
+            silentTarget = nil
+            if silentESP then silentESP:Destroy() silentESP = nil end
+            if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
+            print("[COCO HUB] Silent Aimbot Disabled")
+        end
+    end
 })
 
 Tab:CreateSlider({
-    Name = "Silent Aimbot FOV",
-    Range = {50, 500},
-    Increment = 10,
-    CurrentValue = silentAimbotFOV,
-    Callback = function(val)
-        silentAimbotFOV = val
-        if silentFovCircle then silentFovCircle.Radius = val end
-    end
+    Name = "Silent Aimbot FOV",
+    Range = {50, 500},
+    Increment = 10,
+    CurrentValue = silentAimbotFOV,
+    Callback = function(val)
+        silentAimbotFOV = val
+        if silentFovCircle then silentFovCircle.Radius = val end
+        print("[COCO HUB] Silent Aimbot FOV set to " .. val)
+    end
 })
 
--- Team Tag toggle
+-- Team Tag toggle --
+
 Tab:CreateToggle({
-    Name = "Show Team Tag On Head",
-    CurrentValue = false,
-    Callback = function(state)
-        refreshTeamTags(state)
-    end
+    Name = "Show Team Tag On Head",
+    CurrentValue = false,
+    Callback = function(state)
+        refreshTeamTags(state)
+    end
 })
 
--- Auto-refresh player list every 10 seconds
+-- Auto-refresh player list every 10 seconds --
+
 task.spawn(function()
-    while true do
-        task.wait(10)
-        drop:SetOptions(refreshPlayers())
-    end
+    while true do
+        task.wait(10)
+        if drop then
+            drop:SetOptions(refreshPlayers())
+            print("[COCO HUB] Player list auto-refreshed.")
+        end
+    end
 end)
+
+print("[COCO HUB] Script loaded successfully.")
