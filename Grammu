@@ -10,13 +10,11 @@ if not success or not Rayfield then
     return
 end
 
--- บริการหลัก
 local Players = game:GetService("Players")
 local Plr = Players.LocalPlayer
 repeat task.wait() until Plr and Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
 
--- สร้างหน้าต่าง
 local Window = Rayfield:CreateWindow({
     Name = "COCO HUB",
     LoadingTitle = "COCO HUB",
@@ -43,7 +41,11 @@ local fovCircle, silentTarget = nil, nil
 local silentAimbotEnabled, silentAimbotFOV = false, 100
 local ESPEnabled = false
 local silentAimbotLoop, autoShootLoop = nil, nil
-local silentFovCircle = nil
+local silentFovCircle, silentESP = nil, nil
+local walkSpeedVal = 16
+
+local TeamTagEnabled = false
+local TeamTags = {}
 
 -- ฟังก์ชันรีเฟรชผู้เล่น
 local function refreshPlayers()
@@ -54,11 +56,100 @@ local function refreshPlayers()
     return list
 end
 
--- TAB PLAYER
+-- ฟังก์ชันสร้าง Team Tag บนหัวผู้เล่น
+local function createTeamTag(player)
+    if not player.Character or not player.Character:FindFirstChild("Head") then return end
+    local head = player.Character.Head
+
+    if player.Character:FindFirstChild("TeamTagGui") then
+        player.Character.TeamTagGui:Destroy()
+    end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "TeamTagGui"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = player.Character
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextScaled = true
+    textLabel.Parent = billboard
+
+    if TeamTags[player] then
+        task.cancel(TeamTags[player])
+        TeamTags[player] = nil
+    end
+
+    TeamTags[player] = task.spawn(function()
+        while TeamTagEnabled and player.Parent do
+            if player.Character and player.Character:FindFirstChild("Head") then
+                local team = player.Team
+                if team then
+                    textLabel.Text = team.Name
+                    textLabel.TextColor3 = team.TeamColor.Color
+                else
+                    textLabel.Text = "No Team"
+                    textLabel.TextColor3 = Color3.new(1, 1, 1)
+                end
+            else
+                if player.Character and player.Character:FindFirstChild("TeamTagGui") then
+                    player.Character.TeamTagGui:Destroy()
+                end
+                break
+            end
+            task.wait(0.5)
+        end
+        if player.Character and player.Character:FindFirstChild("TeamTagGui") then
+            player.Character.TeamTagGui:Destroy()
+        end
+    end)
+end
+
+local function removeTeamTag(player)
+    if TeamTags[player] then
+        task.cancel(TeamTags[player])
+        TeamTags[player] = nil
+    end
+    if player.Character and player.Character:FindFirstChild("TeamTagGui") then
+        player.Character.TeamTagGui:Destroy()
+    end
+end
+
+local function refreshTeamTags(state)
+    TeamTagEnabled = state
+    if state then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Plr then
+                createTeamTag(player)
+                player.CharacterAdded:Connect(function()
+                    if TeamTagEnabled then
+                        task.wait(1)
+                        createTeamTag(player)
+                    end
+                end)
+            end
+        end
+        Players.PlayerRemoving:Connect(function(player)
+            removeTeamTag(player)
+        end)
+    else
+        for _, player in pairs(Players:GetPlayers()) do
+            removeTeamTag(player)
+        end
+    end
+end
+
+-- สร้าง Tab Player พร้อมฟีเจอร์ทั้งหมด
 local Tab = Window:CreateTab("Player", 4483362458)
 Tab:CreateSection("Player Tools")
 
--- Dropdown เลือกผู้เล่น
 local drop = Tab:CreateDropdown({
     Name = "Select Player",
     Options = refreshPlayers(),
@@ -72,15 +163,32 @@ local drop = Tab:CreateDropdown({
 Tab:CreateButton({
     Name = "Teleport to Player",
     Callback = function()
-        if not PlayerTP then return warn("⚠️ กรุณาเลือกผู้เล่นก่อนวาร์ป") end
-        local target = Players:FindFirstChild(PlayerTP)
-        if not target then return warn("❌ ไม่พบผู้เล่น: " .. PlayerTP) end
-        local myHRP = Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
-        local targetHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-        if myHRP and targetHRP then
-            myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
-            print("[Debug] วาร์ปไปยัง: " .. PlayerTP)
+        if not PlayerTP then
+            return warn("⚠️ กรุณาเลือกผู้เล่นก่อนวาร์ป")
         end
+
+        local target = Players:FindFirstChild(PlayerTP)
+        if not target then
+            warn("❌ ไม่พบผู้เล่น: " .. PlayerTP)
+            return
+        end
+
+        local targetChar = target.Character or target.CharacterAdded:Wait()
+        local targetHRP = targetChar:WaitForChild("HumanoidRootPart", 5)
+        if not targetHRP then
+            warn("❌ ตัวละครเป้าหมายไม่มี HumanoidRootPart")
+            return
+        end
+
+        local myChar = Plr.Character or Plr.CharacterAdded:Wait()
+        local myHRP = myChar:WaitForChild("HumanoidRootPart", 5)
+        if not myHRP then
+            warn("❌ ตัวละครของคุณไม่มี HumanoidRootPart")
+            return
+        end
+
+        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+        print("[Debug] วาร์ปไปยัง: " .. PlayerTP)
     end
 })
 
@@ -92,10 +200,9 @@ Tab:CreateButton({
     end
 })
 
--- ESP
 Tab:CreateToggle({
     Name = "ESP (Highlight)",
-    CurrentValue = false,
+    CurrentValue = ESPEnabled,
     Callback = function(state)
         ESPEnabled = state
         if state then
@@ -115,7 +222,6 @@ Tab:CreateToggle({
                         end
                     end
                 end
-                -- ลบ ESP ทุกตัวเมื่อปิด toggle
                 for _, v in pairs(Players:GetPlayers()) do
                     if v.Character and v.Character:FindFirstChild("ESP") then
                         v.Character.ESP:Destroy()
@@ -132,33 +238,51 @@ Tab:CreateToggle({
     end
 })
 
--- High Jump
 Tab:CreateToggle({
     Name = "High Jump",
-    CurrentValue = false,
+    CurrentValue = highJump,
     Callback = function(state)
         highJump = state
         local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-        if hum then hum.JumpPower = state and 100 or 50 end
+        if hum then
+            hum.JumpPower = state and 100 or 50
+        end
     end
 })
 
--- WalkSpeed
-Tab:CreateSlider({
+local walkSpeedToggle = false
+local walkSpeedSlider = Tab:CreateSlider({
     Name = "WalkSpeed",
     Range = {16, 100},
     Increment = 1,
-    CurrentValue = 16,
+    CurrentValue = walkSpeedVal,
     Callback = function(val)
+        walkSpeedVal = val
+        if walkSpeedToggle then
+            local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
+            if hum then hum.WalkSpeed = val end
+        end
+    end
+})
+Tab:CreateToggle({
+    Name = "Enable WalkSpeed",
+    CurrentValue = walkSpeedToggle,
+    Callback = function(state)
+        walkSpeedToggle = state
         local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-        if hum then hum.WalkSpeed = val end
+        if hum then
+            if state then
+                hum.WalkSpeed = walkSpeedVal
+            else
+                hum.WalkSpeed = 16
+            end
+        end
     end
 })
 
--- Aimbot (FOV)
 Tab:CreateToggle({
     Name = "Aimbot (FOV + Rainbow)",
-    CurrentValue = false,
+    CurrentValue = aimbotEnabled,
     Callback = function(state)
         aimbotEnabled = state
         if state then
@@ -202,21 +326,19 @@ Tab:CreateSlider({
     Name = "FOV Radius",
     Range = {100, 500},
     Increment = 10,
-    CurrentValue = 100,
+    CurrentValue = fov,
     Callback = function(val)
         fov = val
         if fovCircle then fovCircle.Radius = val end
     end
 })
 
--- Silent Aimbot + Auto Shoot
 Tab:CreateToggle({
     Name = "Silent Aimbot + Auto Shoot",
-    CurrentValue = false,
+    CurrentValue = silentAimbotEnabled,
     Callback = function(state)
         silentAimbotEnabled = state
         if state then
-            -- วงกลมสายรุ้ง Silent Aimbot
             silentFovCircle = Drawing.new("Circle")
             silentFovCircle.Thickness = 2
             silentFovCircle.Transparency = 0.5
@@ -249,13 +371,25 @@ Tab:CreateToggle({
                         end
                     end
                     silentTarget = closest
+
+                    if silentESP then silentESP:Destroy() silentESP = nil end
+                    if silentTarget and silentTarget:IsDescendantOf(workspace) then
+                        silentESP = Instance.new("Highlight")
+                        silentESP.Name = "SilentESP"
+                        silentESP.FillColor = Color3.fromRGB(255, 0, 0)
+                        silentESP.OutlineColor = Color3.fromRGB(255, 100, 100)
+                        silentESP.FillTransparency = 0.3
+                        silentESP.OutlineTransparency = 0
+                        silentESP.Adornee = silentTarget.Parent
+                        silentESP.Parent = silentTarget.Parent
+                    end
                 end
             end)
 
             autoShootLoop = task.spawn(function()
                 while silentAimbotEnabled do
                     task.wait(0.1)
-                    if silentTarget then
+                    if silentTarget and silentTarget:IsDescendantOf(workspace) then
                         local tool = Plr.Character and Plr.Character:FindFirstChildOfClass("Tool")
                         if tool then
                             local remote = tool:FindFirstChildWhichIsA("RemoteEvent")
@@ -274,6 +408,7 @@ Tab:CreateToggle({
             end)
         else
             silentTarget = nil
+            if silentESP then silentESP:Destroy() silentESP = nil end
             if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
             if silentAimbotLoop then task.cancel(silentAimbotLoop) silentAimbotLoop = nil end
             if autoShootLoop then task.cancel(autoShootLoop) autoShootLoop = nil end
@@ -285,30 +420,20 @@ Tab:CreateSlider({
     Name = "Silent Aimbot FOV",
     Range = {50, 500},
     Increment = 10,
-    CurrentValue = 100,
+    CurrentValue = silentAimbotFOV,
     Callback = function(val)
         silentAimbotFOV = val
         if silentFovCircle then silentFovCircle.Radius = val end
     end
 })
 
--- END TAB
-Window:CreateTab("END", 4483362458):CreateButton({
-    Name = "❌ STOP ALL FEATURES",
-    Callback = function()
-        aimbotEnabled = false
-        silentAimbotEnabled = false
-        ESPEnabled = false
-        silentTarget = nil
-        if fovCircle then fovCircle:Destroy() fovCircle = nil end
-        if silentFovCircle then silentFovCircle:Destroy() silentFovCircle = nil end
-        if silentAimbotLoop then task.cancel(silentAimbotLoop) silentAimbotLoop = nil end
-        if autoShootLoop then task.cancel(autoShootLoop) autoShootLoop = nil end
-        for _, v in pairs(Players:GetPlayers()) do
-            if v.Character and v.Character:FindFirstChild("ESP") then
-                v.Character.ESP:Destroy()
-            end
-        end
-        print("[COCO HUB] ❌ ปิดทุกระบบแล้ว")
+-- เพิ่ม Toggle Team Tag
+Tab:CreateToggle({
+    Name = "Show Team Tag On Head",
+    CurrentValue = false,
+    Callback = function(state)
+        refreshTeamTags(state)
     end
 })
+
+-- หมดโค้ด COCO HUB
