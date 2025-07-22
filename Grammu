@@ -1,4 +1,4 @@
--- COCO HUB with Rayfield UI, Key System, Team Tags & ESP
+-- COCO HUB with Rayfield UI, Key System, Team Tags & ESP Highlight
 
 local success, Rayfield = pcall(function()
     return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -63,7 +63,7 @@ local walkSpeedVal = 16
 local fov, silentFov = 100, 120
 local fovCircle, silentFovCircle, silentTarget
 local teamTags = {}
-local ESPBoxes = {}
+local espHighlights = {}
 
 -- Main UI Window
 local Window = Rayfield:CreateWindow({
@@ -96,18 +96,18 @@ Tab:CreateToggle({
     end
 })
 
--- ESP Toggle
+-- ESP Toggle (Highlight Full Body)
 Tab:CreateToggle({
-    Name = "ESP (Highlight Boxes)",
+    Name = "ESP (Highlight Full Body)",
     CurrentValue = false,
     Callback = function(state)
         ESPEnabled = state
         if not ESPEnabled then
-            -- Remove all ESP boxes when turned off
-            for _, box in pairs(ESPBoxes) do
-                if box then box:Remove() end
+            -- Remove all ESP highlights when turned off
+            for _, hl in pairs(espHighlights) do
+                if hl then hl:Destroy() end
             end
-            ESPBoxes = {}
+            espHighlights = {}
         end
     end
 })
@@ -140,7 +140,7 @@ Tab:CreateToggle({
     end
 })
 
--- Team Tags (Name Tags instead of Team for MM2 and Teamless maps)
+-- Team Tags (Name Tags with MM2 Team Colors)
 Tab:CreateToggle({
     Name = "Show Player Name Tags (Above Players)",
     CurrentValue = false,
@@ -170,7 +170,22 @@ Tab:CreateToggle({
                                 text.Size = UDim2.new(1, 0, 1, 0)
                                 text.BackgroundTransparency = 1
                                 text.Text = player.DisplayName or player.Name
-                                text.TextColor3 = Color3.fromRGB(255, 255, 0)
+
+                                -- Set color based on MM2 team name (leaderstats.Team)
+                                local teamName = "None"
+                                if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
+                                    teamName = player.leaderstats.Team.Value
+                                end
+                                if teamName == "Innocent" then
+                                    text.TextColor3 = Color3.fromRGB(0, 255, 0) -- สีเขียว
+                                elseif teamName == "Sheriff" then
+                                    text.TextColor3 = Color3.fromRGB(0, 0, 255) -- สีน้ำเงิน
+                                elseif teamName == "Murderer" then
+                                    text.TextColor3 = Color3.fromRGB(255, 0, 0) -- แดง
+                                else
+                                    text.TextColor3 = Color3.fromRGB(255, 255, 0) -- เหลือง (ทีมอื่นๆ หรือไม่มีทีม)
+                                end
+
                                 text.TextStrokeTransparency = 0.5
                                 text.Font = Enum.Font.GothamBold
                                 text.TextScaled = true
@@ -187,18 +202,7 @@ Tab:CreateToggle({
     end
 })
 
--- Function to create ESP box
-local function CreateESPBox(character)
-    local box = Drawing.new("Square")
-    box.Visible = true
-    box.Color = Color3.fromRGB(0, 255, 20)
-    box.Thickness = 2
-    box.Transparency = 1
-    box.Filled = false
-    return box
-end
-
--- Update ESP Boxes every frame
+-- Main Loop
 RunService.RenderStepped:Connect(function()
     local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
     if hum then
@@ -271,53 +275,31 @@ RunService.RenderStepped:Connect(function()
         silentTarget = nil
     end
 
-    -- ESP Update
+    -- ESP Highlights Update
     if ESPEnabled then
-        local currentPlayers = {}
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= Plr and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-                local hrp = p.Character.HumanoidRootPart
-                local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen then
-                    local size = Vector3.new(2, 5, 1)
-                    local topLeft = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(-size.X/2, size.Y/2, 0))
-                    local bottomRight = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(size.X/2, -size.Y/2, 0))
-                    local boxWidth = math.abs(bottomRight.X - topLeft.X)
-                    local boxHeight = math.abs(bottomRight.Y - topLeft.Y)
-
-                    if not ESPBoxes[p] then
-                        ESPBoxes[p] = CreateESPBox()
-                    end
-
-                    local box = ESPBoxes[p]
-                    box.Position = Vector2.new(topLeft.X, topLeft.Y)
-                    box.Size = Vector2.new(boxWidth, boxHeight)
-                    box.Visible = true
-
-                    currentPlayers[p] = true
-                elseif ESPBoxes[p] then
-                    ESPBoxes[p]:Remove()
-                    ESPBoxes[p] = nil
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+                if not espHighlights[player] then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "ESP_Highlight"
+                    hl.Adornee = player.Character
+                    hl.FillColor = Color3.fromRGB(0, 255, 0) -- สีเขียวเต็มตัว
+                    hl.OutlineColor = Color3.fromRGB(50, 255, 50) -- สีเส้นขอบเขียวอ่อน
+                    hl.FillTransparency = 0.6 -- ปรับโปร่งแสงตามชอบ
+                    hl.OutlineTransparency = 0
+                    hl.Parent = player.Character
+                    espHighlights[player] = hl
                 end
-            elseif ESPBoxes[p] then
-                ESPBoxes[p]:Remove()
-                ESPBoxes[p] = nil
-            end
-        end
-
-        -- Remove ESP boxes for players no longer valid
-        for p, box in pairs(ESPBoxes) do
-            if not currentPlayers[p] then
-                if box then box:Remove() end
-                ESPBoxes[p] = nil
+            elseif espHighlights[player] then
+                espHighlights[player]:Destroy()
+                espHighlights[player] = nil
             end
         end
     else
-        -- Remove all ESP boxes if ESP disabled
-        for _, box in pairs(ESPBoxes) do
-            if box then box:Remove() end
+        for _, hl in pairs(espHighlights) do
+            if hl then hl:Destroy() end
         end
-        ESPBoxes = {}
+        espHighlights = {}
     end
 end)
 
@@ -330,7 +312,8 @@ mt.__namecall = newcclosure(function(self, ...)
     local args = { ... }
     local method = getnamecallmethod()
     if tostring(method) == "FireServer" and tostring(self.Name) == "Shoot" then
-        if silentAimbotEnabled and silentTarget and typeof(args[1]) == "Vector3" then
+    
+    if silentAimbotEnabled and silentTarget and typeof(args[1]) == "Vector3" then
             args[1] = silentTarget.Position + Vector3.new(0, 1.5, 0)
             return old(self, unpack(args))
         end
@@ -338,4 +321,4 @@ mt.__namecall = newcclosure(function(self, ...)
     return old(self, ...)
 end)
 
-print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | TeamTag & ESP Enabled")
+print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | TeamTag & ESP Highlight Enabled")
