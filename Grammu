@@ -99,7 +99,7 @@ local function refreshTeamTags(state)
     end
 end
 
--- ฟังก์ชันหาตัวที่ใกล้ที่สุดตาม FOV และ LockPart
+-- หาตัวที่ใกล้ที่สุดตาม FOV และ LockPart
 local function findClosestTarget(radius, lockPart)
     local bestDist = math.huge
     local bestPart = nil
@@ -157,7 +157,7 @@ MainTab:CreateToggle({
                         end
                     end
                 end
-                -- Clear ESP
+                -- เคลียร์ ESP เมื่อปิด
                 for _, p in pairs(Players:GetPlayers()) do
                     if p.Character and p.Character:FindFirstChild("ESP") then
                         p.Character.ESP:Destroy()
