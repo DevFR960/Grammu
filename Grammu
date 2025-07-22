@@ -21,16 +21,16 @@ local CurrentTarget
 
 -- 🔐 Key System
 local Window = Rayfield:CreateWindow({
-    Name = "🌸 COCO HUB - MM2 Edition",
+    Name = "🙏Thanks for use My Script🙏",
     LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "by DevFR960",
+    LoadingSubtitle = "by DVD_LOVE",
     ConfigurationSaving = { Enabled = false },
     Discord = { Enabled = false },
     KeySystem = true,
     KeySettings = {
         Title = "COCO HUB Key System",
         Subtitle = "Enter key to unlock",
-        Note = "Key = Flower",
+        Note = "wow you found my script",
         FileName = "COCO_Key",
         SaveKey = false,
         GrabKeyFromSite = false,
