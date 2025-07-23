@@ -1,11 +1,11 @@
--- COCO HUB FULL SCRIPT (NO LOADSTRING) - WITH KEY SYSTEM & FULL FEATURES
+-- COCO HUB FULL SCRIPT (ENGLISH ONLY) - WITH KEY SYSTEM & FULL FEATURES
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
--- โหลด Rayfield UI (แทนที่ด้วย local file หรือใส่ในโฟลเดอร์ Executor ของคุณได้เลย)
+-- Load Rayfield UI
 local success, Rayfield = pcall(function()
     return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 end)
@@ -18,7 +18,7 @@ local keyInput = ""
 local correctKey = "Flower"
 local keyAccepted = false
 
--- สร้างหน้าต่าง Key System
+-- Create Key System Window
 local KeyWindow = Rayfield:CreateWindow({
     Name = "🔐 COCO HUB - Key System",
     LoadingTitle = "COCO HUB",
@@ -40,20 +40,20 @@ KeyTab:CreateInput({
 })
 
 local function OpenMainGUI()
-    -- รอจนกระทั่งตัวละครโหลดเสร็จ
+    -- Wait until character is loaded
     repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-    -- ตัวแปรสถานะ
+    -- Feature variables
     local aimbotEnabled, silentAimbotEnabled, ESPEnabled = false, false, false
     local highJumpEnabled, walkSpeedToggle = false, false
-    local TeamTagEnabled = false
+    local teamTagEnabled = false
     local walkSpeedVal = 16
     local fov, silentFov = 100, 120
     local fovCircle, silentFovCircle, silentTarget
     local teamTags = {}
     local espHighlights = {}
 
-    -- สร้างหน้าต่างหลัก
+    -- Create main window
     local Window = Rayfield:CreateWindow({
         Name = "🌈 COCO HUB",
         LoadingTitle = "COCO HUB",
@@ -65,7 +65,7 @@ local function OpenMainGUI()
 
     local Tab = Window:CreateTab("Main", 4483362458)
 
-    -- Aimbot Toggle
+    -- Aimbot toggle
     Tab:CreateToggle({
         Name = "Aimbot (FOV + Rainbow)",
         CurrentValue = false,
@@ -74,7 +74,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- Silent Aim Toggle
+    -- Silent Aim toggle
     Tab:CreateToggle({
         Name = "Silent Aimbot (Bullet Redirect)",
         CurrentValue = false,
@@ -83,7 +83,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- ESP Toggle (Highlight)
+    -- ESP toggle (Highlight)
     Tab:CreateToggle({
         Name = "ESP (Highlight Full Body)",
         CurrentValue = false,
@@ -98,7 +98,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- WalkSpeed Slider + Toggle
+    -- WalkSpeed slider + toggle
     Tab:CreateSlider({
         Name = "WalkSpeed",
         Range = {16, 200},
@@ -117,7 +117,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- High Jump Toggle
+    -- High Jump toggle
     Tab:CreateToggle({
         Name = "High Jump",
         CurrentValue = false,
@@ -126,14 +126,14 @@ local function OpenMainGUI()
         end,
     })
 
-    -- Team Tags Toggle
+    -- Team Tags toggle
     Tab:CreateToggle({
         Name = "Show Player Name Tags (MM2 Colors)",
         CurrentValue = false,
         Callback = function(state)
-            TeamTagEnabled = state
+            teamTagEnabled = state
 
-            -- ทำลายทุก Tag เดิมก่อน
+            -- Destroy existing tags first
             for _, tag in pairs(teamTags) do
                 if tag and tag.Parent then
                     tag:Destroy()
@@ -141,10 +141,9 @@ local function OpenMainGUI()
             end
             table.clear(teamTags)
 
-            if TeamTagEnabled then
-                -- สร้าง Task แยก เพื่ออัพเดต Team Tags
+            if teamTagEnabled then
                 task.spawn(function()
-                    while TeamTagEnabled do
+                    while teamTagEnabled do
                         task.wait(1)
                         for _, player in pairs(Players:GetPlayers()) do
                             if player ~= LocalPlayer and player.Character and not teamTags[player] then
@@ -162,13 +161,13 @@ local function OpenMainGUI()
                                     text.BackgroundTransparency = 1
                                     text.Text = player.DisplayName or player.Name
 
-                                    -- อ่านข้อมูลทีมจาก leaderstats.Team หรือ fallback เป็น None
+                                    -- Read team from leaderstats.Team or default to None
                                     local teamName = "None"
                                     if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
                                         teamName = player.leaderstats.Team.Value
                                     end
 
-                                    -- กำหนดสีตามทีม MM2
+                                    -- Set color by MM2 team
                                     if teamName == "Innocent" then
                                         text.TextColor3 = Color3.fromRGB(0, 255, 0)
                                     elseif teamName == "Sheriff" then
@@ -190,7 +189,7 @@ local function OpenMainGUI()
                             end
                         end
                     end
-                    -- เมื่อปิด TeamTagEnabled จะลบ Tag ทั้งหมดที่เหลือ
+                    -- Clean up tags on toggle off
                     for _, tag in pairs(teamTags) do
                         if tag and tag.Parent then
                             tag:Destroy()
@@ -199,7 +198,7 @@ local function OpenMainGUI()
                     table.clear(teamTags)
                 end)
             else
-                -- ถ้าเปิดเป็น false ให้ลบทุก Tag ที่มี
+                -- Destroy all tags immediately if toggled off
                 for _, tag in pairs(teamTags) do
                     if tag and tag.Parent then
                         tag:Destroy()
@@ -210,7 +209,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- RenderStepped Loop (อัพเดตทุก Frame)
+    -- RenderStepped update loop
     RunService.RenderStepped:Connect(function()
         local char = LocalPlayer.Character
         if char then
