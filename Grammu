@@ -161,20 +161,32 @@ local function OpenMainGUI()
                                     text.BackgroundTransparency = 1
                                     text.Text = player.DisplayName or player.Name
 
-                                    -- Determine team color by leaderstats.Team if exists
-                                    local teamName = "None"
+                                    -- Try get team name from leaderstats.Team (for MM2)
+                                    local teamName = "Unknown"
                                     if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
-                                        teamName = player.leaderstats.Team.Value
+                                        local val = player.leaderstats.Team.Value
+                                        if val == "Innocent" or val == "Murderer" or val == "Sheriff" then
+                                            teamName = val
+                                        else
+                                            -- Sometimes teamName is a number or other, try to convert
+                                            teamName = tostring(val)
+                                        end
+                                    else
+                                        -- If leaderstats.Team not found, try fallback (e.g., check player.Team or similar)
+                                        if player.Team then
+                                            teamName = player.Team.Name
+                                        end
                                     end
 
+                                    -- Set color based on teamName
                                     if teamName == "Innocent" then
-                                        text.TextColor3 = Color3.fromRGB(0, 255, 0)
+                                        text.TextColor3 = Color3.fromRGB(0, 255, 0)         -- Green
                                     elseif teamName == "Sheriff" then
-                                        text.TextColor3 = Color3.fromRGB(0, 0, 255)
+                                        text.TextColor3 = Color3.fromRGB(0, 0, 255)         -- Blue
                                     elseif teamName == "Murderer" then
-                                        text.TextColor3 = Color3.fromRGB(255, 0, 0)
+                                        text.TextColor3 = Color3.fromRGB(255, 0, 0)         -- Red
                                     else
-                                        text.TextColor3 = Color3.fromRGB(255, 255, 0)
+                                        text.TextColor3 = Color3.fromRGB(255, 255, 0)       -- Yellow (Unknown)
                                     end
 
                                     text.TextStrokeTransparency = 0.5
@@ -339,6 +351,7 @@ KeyTab:CreateButton({
                     warn("Failed to destroy KeyWindow:", err)
                 end
             end
+
             keyAccepted = true
             OpenMainGUI()
         else
