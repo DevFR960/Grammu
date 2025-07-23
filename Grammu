@@ -1,183 +1,339 @@
---// COCO HUB - DELTA MM2 (NO LOADSTRING, NO HTTPGET, FULL OFFLINE)
-local Plr = game.Players.LocalPlayer
-local Mouse = Plr:GetMouse()
+-- COCO HUB MM2 Full Script
+-- Features: Key System, WalkSpeed, HighJump, Aimbot (Head), Silent Aim, ESP, Team Tags (from Role), Rayfield UI
+-- Key: "Flower"
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-local UIS = game:GetService("UserInputService")
-local RS = game:GetService("RunService")
 
-local GUI = Instance.new("ScreenGui", Plr:WaitForChild("PlayerGui"))
-GUI.Name = "COCO_HUB"
-local Frame = Instance.new("Frame", GUI)
-Frame.Size = UDim2.new(0, 300, 0, 400)
-Frame.Position = UDim2.new(0.5, -150, 0.5, -200)
-Frame.BackgroundColor3 = Color3.new(0, 0, 0)
-Frame.BackgroundTransparency = 0.3
-Frame.BorderSizePixel = 0
-Frame.Active = true
-Frame.Draggable = true
+-- Key System (simple TextBox)
+local correctKey = "Flower"
+local function promptKey()
+    local CoreGui = game:GetService("CoreGui")
+    local screen = Instance.new("ScreenGui")
+    screen.Name = "KeySystem"
+    screen.Parent = CoreGui
 
-local function createButton(text, y, callback)
-	local btn = Instance.new("TextButton", Frame)
-	btn.Size = UDim2.new(1, -10, 0, 30)
-	btn.Position = UDim2.new(0, 5, 0, y)
-	btn.Text = text
-	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.TextScaled = true
-	btn.MouseButton1Click:Connect(callback)
-	return btn
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 200, 0, 50)
+    box.Position = UDim2.new(0.5, -100, 0.5, -25)
+    box.PlaceholderText = "Enter Key"
+    box.TextScaled = true
+    box.Parent = screen
+
+    local confirmed = false
+    box.FocusLost:Connect(function(enter)
+        if enter and box.Text == correctKey then
+            screen:Destroy()
+            confirmed = true
+        else
+            box.Text = ""
+            box.PlaceholderText = "Incorrect! Try again."
+        end
+    end)
+    repeat task.wait() until confirmed
 end
+promptKey()
+
+-- Load Rayfield UI (you need to do the loadstring in your executor)
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+    Name = "🌈 COCO HUB - MM2",
+    LoadingTitle = "COCO HUB",
+    LoadingSubtitle = "by DevFR960",
+    ConfigurationSaving = { Enabled = false },
+    KeySystem = false,
+})
 
 -- Variables
 local walkSpeed = 16
 local jumpPower = 50
+local walkSpeedEnabled = false
+local highJumpEnabled = false
 local aimbotEnabled = false
 local silentAimEnabled = false
 local espEnabled = false
-local lockPart = "Head" -- or "HumanoidRootPart"
-local teamTags = true
 
--- MM2 Team Tag System
-local function applyTeamTags()
-	for _, player in ipairs(game.Players:GetPlayers()) do
-		if player ~= Plr then
-			local tag = player:FindFirstChild("Role") or player:FindFirstChild("role") or player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team")
-			if tag then
-				local color = Color3.new(1,1,1)
-				local txt = tostring(tag.Value)
-				if txt:lower() == "innocent" then color = Color3.fromRGB(0,255,0)
-				elseif txt:lower() == "sheriff" then color = Color3.fromRGB(0,0,255)
-				elseif txt:lower() == "murderer" then color = Color3.fromRGB(255,0,0)
-				end
-				if not player:FindFirstChild("COCOTag") then
-					local bill = Instance.new("BillboardGui", player.Character:WaitForChild("Head"))
-					bill.Name = "COCOTag"
-					bill.Size = UDim2.new(0,100,0,30)
-					bill.StudsOffset = Vector3.new(0,2,0)
-					bill.AlwaysOnTop = true
-					local txtlbl = Instance.new("TextLabel", bill)
-					txtlbl.Size = UDim2.new(1,0,1,0)
-					txtlbl.Text = txt
-					txtlbl.BackgroundTransparency = 1
-					txtlbl.TextColor3 = color
-					txtlbl.TextScaled = true
-				end
-			end
-		end
-	end
+local LockPart = "Head" -- Aimbot lock to head
+local silentTarget = nil
+local espHighlights = {}
+local teamTags = {}
+
+-- Utility function to get player role from player object
+local function getPlayerRole(player)
+    local roleValue = player:FindFirstChild("Role") or player:FindFirstChild("MM2Role")
+    if roleValue and roleValue:IsA("StringValue") then
+        return roleValue.Value
+    end
+    return "Unknown"
 end
 
--- ESP
-local function enableESP()
-	while espEnabled do
-		for _,v in ipairs(game.Players:GetPlayers()) do
-			if v ~= Plr and v.Character and v.Character:FindFirstChild("Head") then
-				if not v.Character.Head:FindFirstChild("ESP") then
-					local esp = Instance.new("BillboardGui", v.Character.Head)
-					esp.Name = "ESP"
-					esp.Size = UDim2.new(0, 100, 0, 20)
-					esp.AlwaysOnTop = true
-					esp.StudsOffset = Vector3.new(0, 2, 0)
-					local txt = Instance.new("TextLabel", esp)
-					txt.Text = v.Name
-					txt.Size = UDim2.new(1,0,1,0)
-					txt.BackgroundTransparency = 1
-					txt.TextColor3 = Color3.new(1,0,0)
-					txt.TextScaled = true
-				end
-			end
-		end
-		task.wait(1)
-	end
-	for _,v in ipairs(game.Players:GetPlayers()) do
-		if v.Character and v.Character:FindFirstChild("Head") and v.Character.Head:FindFirstChild("ESP") then
-			v.Character.Head.ESP:Destroy()
-		end
-	end
+-- Function to create team tag billboard
+local function createTeamTag(player)
+    if not player.Character or not player.Character:FindFirstChild("Head") then return end
+    if teamTags[player] then return end
+
+    local tag = Instance.new("BillboardGui")
+    tag.Name = "TeamTag"
+    tag.Adornee = player.Character.Head
+    tag.Size = UDim2.new(0, 100, 0, 35)
+    tag.StudsOffset = Vector3.new(0, 2.5, 0)
+    tag.AlwaysOnTop = true
+
+    local label = Instance.new("TextLabel", tag)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextScaled = true
+
+    local role = getPlayerRole(player)
+    label.Text = role
+
+    if role == "Sheriff" then
+        label.TextColor3 = Color3.fromRGB(0, 255, 255) -- Cyan
+    elseif role == "Murderer" then
+        label.TextColor3 = Color3.fromRGB(255, 0, 0) -- Red
+    elseif role == "Innocent" then
+        label.TextColor3 = Color3.fromRGB(255, 255, 255) -- White
+    else
+        label.TextColor3 = Color3.fromRGB(255, 255, 0) -- Yellow for unknown
+    end
+
+    tag.Parent = player.Character.Head
+    teamTags[player] = tag
 end
 
--- Aimbot
+-- Remove all team tags
+local function clearTeamTags()
+    for player, tag in pairs(teamTags) do
+        if tag and tag.Parent then
+            tag:Destroy()
+        end
+    end
+    teamTags = {}
+end
+
+-- Get closest target to mouse for aimbot and silent aim
 local function getClosestTarget()
-	local maxDist = 9999
-	local target = nil
-	for _,v in ipairs(game.Players:GetPlayers()) do
-		if v ~= Plr and v.Character and v.Character:FindFirstChild(lockPart) then
-			local pos, onScreen = Camera:WorldToViewportPoint(v.Character[lockPart].Position)
-			local dist = (Vector2.new(pos.X,pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-			if onScreen and dist < maxDist then
-				maxDist = dist
-				target = v
-			end
-		end
-	end
-	return target
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(LockPart) then
+            local headPos, onScreen = Camera:WorldToViewportPoint(player.Character[LockPart].Position)
+            if onScreen then
+                local screenPos = Vector2.new(headPos.X, headPos.Y)
+                local dist = (screenPos - mousePos).Magnitude
+                if dist < shortestDistance then
+                    shortestDistance = dist
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+    return closestPlayer
 end
 
-RS.RenderStepped:Connect(function()
-	if aimbotEnabled then
-		local target = getClosestTarget()
-		if target and target.Character and target.Character:FindFirstChild(lockPart) then
-			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character[lockPart].Position)
-		end
-	end
+-- UI Setup
+
+local MainTab = Window:CreateTab("Main", 4483362458)
+
+MainTab:CreateToggle({
+    Name = "Enable WalkSpeed",
+    CurrentValue = false,
+    Flag = "WalkSpeedToggle",
+    Callback = function(state)
+        walkSpeedEnabled = state
+        if not state and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 200},
+    Increment = 1,
+    CurrentValue = walkSpeed,
+    Flag = "WalkSpeedValue",
+    Callback = function(value)
+        walkSpeed = value
+        if walkSpeedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = value
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Enable High Jump",
+    CurrentValue = false,
+    Flag = "HighJumpToggle",
+    Callback = function(state)
+        highJumpEnabled = state
+        if not state and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpPower = 50
+        end
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {50, 200},
+    Increment = 1,
+    CurrentValue = jumpPower,
+    Flag = "JumpPowerValue",
+    Callback = function(value)
+        jumpPower = value
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpPower = value
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Flag = "AimbotToggle",
+    Callback = function(state)
+        aimbotEnabled = state
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Enable Silent Aim",
+    CurrentValue = false,
+    Flag = "SilentAimToggle",
+    Callback = function(state)
+        silentAimEnabled = state
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Enable ESP Highlight",
+    CurrentValue = false,
+    Flag = "ESPToggle",
+    Callback = function(state)
+        espEnabled = state
+        if not state then
+            for _, hl in pairs(espHighlights) do
+                if hl and hl.Parent then
+                    hl:Destroy()
+                end
+            end
+            espHighlights = {}
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Show Team Tags",
+    CurrentValue = false,
+    Flag = "TeamTagToggle",
+    Callback = function(state)
+        if state then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    createTeamTag(player)
+                end
+            end
+        else
+            clearTeamTags()
+        end
+    end,
+})
+
+-- Connect Player Added and Removing for Team Tags update
+Players.PlayerAdded:Connect(function(player)
+    if espEnabled or (Window.Flags["TeamTagToggle"] and Window.Flags["TeamTagToggle"].Value) then
+        createTeamTag(player)
+    end
 end)
 
--- WalkSpeed / Jump
-Plr.CharacterAdded:Connect(function(char)
-	task.wait(1)
-	char:WaitForChild("Humanoid").WalkSpeed = walkSpeed
-	char.Humanoid.JumpPower = jumpPower
+Players.PlayerRemoving:Connect(function(player)
+    if teamTags[player] then
+        teamTags[player]:Destroy()
+        teamTags[player] = nil
+    end
 end)
 
--- Buttons
-local y = 10
-createButton("WalkSpeed +20", y, function()
-	walkSpeed = math.clamp(walkSpeed + 20, 16, 200)
-	if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
-		Plr.Character.Humanoid.WalkSpeed = walkSpeed
-	end
-end)
-y += 35
+-- Main loop
+RunService.RenderStepped:Connect(function()
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if walkSpeedEnabled then
+                humanoid.WalkSpeed = walkSpeed
+            else
+                humanoid.WalkSpeed = 16
+            end
 
-createButton("High Jump +10", y, function()
-	jumpPower += 10
-	if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
-		Plr.Character.Humanoid.JumpPower = jumpPower
-	end
-end)
-y += 35
+            if highJumpEnabled then
+                humanoid.JumpPower = jumpPower
+            else
+                humanoid.JumpPower = 50
+            end
+        end
+    end
 
-createButton("Toggle Aimbot", y, function()
-	aimbotEnabled = not aimbotEnabled
-end)
-y += 35
+    -- Aimbot lock camera to closest target head
+    if aimbotEnabled then
+        local target = getClosestTarget()
+        if target and target.Character and target.Character:FindFirstChild(LockPart) then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character[LockPart].Position)
+        end
+    end
 
-createButton("Toggle Silent Aim", y, function()
-	silentAimEnabled = not silentAimEnabled
+    -- ESP Highlight for all players when enabled
+    if espEnabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChildOfClass("Humanoid") and player.Character.Humanoid.Health > 0 then
+                if not espHighlights[player] then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Adornee = player.Character
+                    highlight.FillColor = Color3.fromRGB(0, 255, 0)
+                    highlight.FillTransparency = 0.6
+                    highlight.OutlineTransparency = 0
+                    highlight.Parent = player.Character
+                    espHighlights[player] = highlight
+                end
+            elseif espHighlights[player] then
+                espHighlights[player]:Destroy()
+                espHighlights[player] = nil
+            end
+        end
+    end
 end)
-y += 35
 
-createButton("Toggle ESP", y, function()
-	espEnabled = not espEnabled
-	enableESP()
-end)
-y += 35
+-- Silent Aim Bullet Redirect Hook
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
 
-createButton("Lock: Head / Body", y, function()
-	lockPart = (lockPart == "Head" and "HumanoidRootPart" or "Head")
+mt.__namecall = newcclosure(function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+    if tostring(method) == "FireServer" and tostring(self.Name) == "Shoot" and silentAimEnabled and silentTarget then
+        if typeof(args[1]) == "Vector3" then
+            args[1] = silentTarget.Character[LockPart].Position + Vector3.new(0, 1.5, 0)
+            return oldNamecall(self, unpack(args))
+        end
+    end
+    return oldNamecall(self, ...)
 end)
-y += 35
 
-createButton("Toggle Team Tags", y, function()
-	teamTags = not teamTags
-	if teamTags then
-		applyTeamTags()
-	else
-		for _,p in ipairs(game.Players:GetPlayers()) do
-			if p.Character and p.Character:FindFirstChild("Head") then
-				local t = p.Character.Head:FindFirstChild("COCOTag")
-				if t then t:Destroy() end
-			end
-		end
-	end
+setreadonly(mt, true)
+
+-- Update silentTarget each frame
+RunService.RenderStepped:Connect(function()
+    if silentAimEnabled then
+        silentTarget = getClosestTarget()
+    else
+        silentTarget = nil
+    end
 end)
+
+print("[✅ COCO HUB MM2 Loaded Successfully]")
