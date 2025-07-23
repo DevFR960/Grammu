@@ -1,14 +1,3 @@
-# Recreate and save the complete COCO HUB MM2 script again to ensure it's written properly
-coco_hub_script = '''--[[
-
- COCO HUB - FULL MM2 SCRIPT
-
- Features: WalkSpeed, High Jump, Aimbot (Head/Body), Silent Aimbot, ESP, Team Tags (MM2), Teleport, Rayfield UI, Key System
-
- No Callback Errors | English Only | Designed for MM2 | Key = "Flower"
-
---]]
-
 
 --==[🌼 Key System]===--
 
@@ -195,11 +184,3 @@ for _, v in pairs(Players:GetPlayers()) do
   end
  end
 end
-'''
-
-# Save to file
-output_path = "/mnt/data/COCO_HUB_MM2_FULL.lua"
-with open(output_path, "w") as f:
-    f.write(coco_hub_script)
-
-output_path
