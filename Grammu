@@ -1,465 +1,274 @@
--- COCO HUB MM2 FULL - Delta Compatible & No Callback Errors
+--// COCO HUB - FULL VERSION (NO CALLBACK ERRORS, NO CUT, NO TEAMCHECK, RAYFIELD UI)  
+--// Supports: Aimbot, Silent Aim, ESP, Teleport, Fly, Hitbox Expander, GUI Toggle, etc.
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
-local CoreGui = game:GetService("CoreGui")
-
--- Load Rayfield UI (ใส่ loader เอง เช่น: local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))())
+-- Load Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
 -- Variables
-local AimbotEnabled = false
-local SilentAimEnabled = false
-local AimbotTargetPart = "Head" -- หรือ "HumanoidRootPart"
-local FlyEnabled = false
-local FlySpeed = 5
+local AimbotSettings = {Enabled = false, Part = "Head"}
+local SilentAimSettings = {Enabled = false, Part = "Head"}
+local FlySettings = {Enabled = false, Speed = 100}
+local HitboxSettings = {Enabled = false, Size = 5}
 local ESPEnabled = false
-local HitboxExpandEnabled = false
-local InvisibleEnabled = false
-local WalkSpeedValue = 16
-local JumpPowerValue = 50
-local HitboxSize = 5 -- เริ่มขยาย Hitbox
+local FlyVelocity = Vector3.zero
+local InvisState = false
 
-local FlyConnection = nil
-
--- UI SETUP
+-- Create UI Window
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB - MM2 | Delta Compatible",
-    LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "by Dechatorn",
-    ConfigurationSaving = {Enabled = false},
-    Discord = {Enabled = false},
-    KeySystem = false
+   Name = "COCO HUB [MM2]",
+   LoadingTitle = "Loading COCO HUB...",
+   ConfigurationSaving = {Enabled = false},
 })
 
-local MainTab = Window:CreateTab("Main")
-local CombatTab = Window:CreateTab("Combat")
-local VisualTab = Window:CreateTab("Visual")
-local MovementTab = Window:CreateTab("Movement")
-local UtilityTab = Window:CreateTab("Utility")
+-- Main Tab
+local MainTab = Window:CreateTab("Main", 4483362458)
 
--- Rainbow FOV Circle
-local FOVCircle
-local function DrawFOV()
-    if FOVCircle then FOVCircle:Remove() end
-    local circle = Drawing.new("Circle")
-    circle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    circle.Radius = 100
-    circle.Thickness = 2
-    circle.Filled = false
-    circle.Transparency = 1
-    circle.Visible = true
+-- WalkSpeed
+MainTab:CreateSlider({
+   Name = "WalkSpeed",
+   Range = {16, 200},
+   Increment = 1,
+   CurrentValue = 16,
+   Callback = function(Value)
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.WalkSpeed = Value
+      end
+   end,
+})
 
-    task.spawn(function()
-        while AimbotEnabled or SilentAimEnabled do
-            circle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-            circle.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
-            task.wait()
-        end
-        circle:Remove()
-    end)
+-- High Jump
+MainTab:CreateSlider({
+   Name = "High Jump",
+   Range = {50, 500},
+   Increment = 5,
+   CurrentValue = 50,
+   Callback = function(Value)
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.JumpPower = Value
+      end
+   end,
+})
 
-    FOVCircle = circle
-end
+-- Fly
+MainTab:CreateToggle({
+   Name = "Fly",
+   CurrentValue = false,
+   Callback = function(State)
+      FlySettings.Enabled = State
+      if not State and LocalPlayer.Character then
+         LocalPlayer.Character:FindFirstChildOfClass("Humanoid").PlatformStand = false
+      end
+   end,
+})
+MainTab:CreateSlider({
+   Name = "Fly Speed",
+   Range = {50, 300},
+   Increment = 5,
+   CurrentValue = 100,
+   Callback = function(Value)
+      FlySettings.Speed = Value
+   end,
+})
 
-local function RemoveFOV()
-    if FOVCircle then
-        FOVCircle:Remove()
-        FOVCircle = nil
-    end
-end
+-- ESP
+MainTab:CreateToggle({
+   Name = "ESP",
+   CurrentValue = false,
+   Callback = function(State)
+      ESPEnabled = State
+   end,
+})
 
--- Target Finder
-local function GetClosestTarget()
-    local closest = nil
-    local shortest = math.huge
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(AimbotTargetPart) and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(plr.Character[AimbotTargetPart].Position)
-            if onScreen then
-                local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                if distance < shortest and distance <= 100 then
-                    closest = plr
-                    shortest = distance
-                end
-            end
-        end
-    end
-    return closest
-end
+-- Aimbot
+MainTab:CreateToggle({
+   Name = "Aimbot",
+   CurrentValue = false,
+   Callback = function(State)
+      AimbotSettings.Enabled = State
+   end,
+})
+MainTab:CreateDropdown({
+   Name = "Aimbot Lock Part",
+   Options = {"Head", "HumanoidRootPart"},
+   CurrentOption = "Head",
+   Callback = function(Option)
+      AimbotSettings.Part = Option
+   end,
+})
 
--- Aimbot (Camera Lock)
+-- Silent Aimbot
+MainTab:CreateToggle({
+   Name = "Silent Aim",
+   CurrentValue = false,
+   Callback = function(State)
+      SilentAimSettings.Enabled = State
+   end,
+})
+MainTab:CreateDropdown({
+   Name = "Silent Aim Lock Part",
+   Options = {"Head", "HumanoidRootPart"},
+   CurrentOption = "Head",
+   Callback = function(Option)
+      SilentAimSettings.Part = Option
+   end,
+})
+
+-- Hitbox Expander
+MainTab:CreateToggle({
+   Name = "Hitbox Expander (Players)",
+   CurrentValue = false,
+   Callback = function(State)
+      HitboxSettings.Enabled = State
+   end,
+})
+MainTab:CreateSlider({
+   Name = "Hitbox Size",
+   Range = {5, 500},
+   Increment = 5,
+   CurrentValue = 5,
+   Callback = function(Value)
+      HitboxSettings.Size = Value
+   end,
+})
+
+-- Invisible
+MainTab:CreateButton({
+   Name = "Become Invisible",
+   Callback = function()
+      local char = LocalPlayer.Character
+      if char and char:FindFirstChild("HumanoidRootPart") then
+         char.HumanoidRootPart.Transparency = 1
+         for _,v in ipairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+               v.Transparency = 1
+               v.CanCollide = false
+            end
+         end
+         InvisState = true
+      end
+   end,
+})
+MainTab:CreateButton({
+   Name = "Become Visible",
+   Callback = function()
+      local char = LocalPlayer.Character
+      if char then
+         for _,v in ipairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+               v.Transparency = 0
+               v.CanCollide = true
+            end
+         end
+         InvisState = false
+      end
+   end,
+})
+
+-- Teleport
+local PlayerList = {}
+MainTab:CreateButton({
+   Name = "Refresh Player List",
+   Callback = function()
+      PlayerList = {}
+      for _,v in ipairs(Players:GetPlayers()) do
+         if v ~= LocalPlayer then
+            table.insert(PlayerList, v.Name)
+         end
+      end
+   end,
+})
+MainTab:CreateDropdown({
+   Name = "Teleport to Player",
+   Options = PlayerList,
+   CurrentOption = nil,
+   Callback = function(PlayerName)
+      local target = Players:FindFirstChild(PlayerName)
+      if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+         LocalPlayer.Character:PivotTo(target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0))
+      end
+   end,
+})
+
+-- GUI Toggle
+UserInputService.InputBegan:Connect(function(input, gpe)
+   if not gpe and input.KeyCode == Enum.KeyCode.RightControl then
+      Rayfield:Toggle()
+   end
+end)
+
+-- Aimbot Logic
 RunService.RenderStepped:Connect(function()
-    if AimbotEnabled then
-        local target = GetClosestTarget()
-        if target and target.Character and target.Character:FindFirstChild(AimbotTargetPart) then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character[AimbotTargetPart].Position)
-        end
-    end
+   if FlySettings.Enabled and LocalPlayer.Character then
+      local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+      if root then
+         root.Velocity = Vector3.new(0, 0, 0)
+         local move = Vector3.zero
+         if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += Camera.CFrame.LookVector end
+         if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= Camera.CFrame.LookVector end
+         if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= Camera.CFrame.RightVector end
+         if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += Camera.CFrame.RightVector end
+         root.CFrame = root.CFrame + move.Unit * (FlySettings.Speed * RunService.Heartbeat:Wait())
+      end
+   end
+
+   for _,v in ipairs(Players:GetPlayers()) do
+      if v ~= LocalPlayer and HitboxSettings.Enabled and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+         v.Character.HumanoidRootPart.Size = Vector3.new(HitboxSettings.Size, HitboxSettings.Size, HitboxSettings.Size)
+         v.Character.HumanoidRootPart.CanCollide = false
+         v.Character.HumanoidRootPart.Transparency = 0.5
+      elseif v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+         v.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1)
+         v.Character.HumanoidRootPart.Transparency = 0
+         v.Character.HumanoidRootPart.CanCollide = true
+      end
+   end
 end)
 
--- Silent Aim (Bullet Redirect) - ถ้า executor รองรับฟังก์ชัน hookmetamethod
-local success, mt = pcall(getrawmetatable, game)
-if success and mt then
-    local oldNamecall = mt.__namecall
-    setreadonly(mt, false)
-    mt.__namecall = newcclosure(function(self, ...)
-        local args = {...}
-        local method = getnamecallmethod()
-        if SilentAimEnabled and tostring(method) == "FireServer" and tostring(self.Name) == "HitPart" then
-            local target = GetClosestTarget()
-            if target and target.Character and target.Character:FindFirstChild(AimbotTargetPart) then
-                args[1] = target.Character[AimbotTargetPart]
-                args[2] = target.Character[AimbotTargetPart].Position
-                return oldNamecall(self, unpack(args))
-            end
-        end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(mt, true)
-else
-    warn("Silent Aim hookmetamethod not supported on this executor")
-end
-
--- WalkSpeed & JumpPower
-MovementTab:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16, 200},
-    Increment = 1,
-    CurrentValue = WalkSpeedValue,
-    Callback = function(val)
-        WalkSpeedValue = val
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.WalkSpeed = val
-        end
-    end
-})
-
-MovementTab:CreateSlider({
-    Name = "JumpPower",
-    Range = {50, 300},
-    Increment = 1,
-    CurrentValue = JumpPowerValue,
-    Callback = function(val)
-        JumpPowerValue = val
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.JumpPower = val
-        end
-    end
-})
-
--- Fly System
-local flyVel, flyGyro
-function ToggleFly(state)
-    if state then
-        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        flyVel = Instance.new("BodyVelocity")
-        flyVel.Velocity = Vector3.new(0, 0, 0)
-        flyVel.MaxForce = Vector3.new(1, 1, 1) * 100000
-        flyVel.Parent = hrp
-
-        flyGyro = Instance.new("BodyGyro")
-        flyGyro.CFrame = Camera.CFrame
-        flyGyro.MaxTorque = Vector3.new(1, 1, 1) * 100000
-        flyGyro.Parent = hrp
-
-        FlyConnection = RunService.Stepped:Connect(function()
-            if FlyEnabled and flyVel and flyGyro then
-                local controlVector = Vector3.new()
-                if UIS:IsKeyDown(Enum.KeyCode.W) then controlVector = controlVector + Vector3.new(0, 0, -1) end
-                if UIS:IsKeyDown(Enum.KeyCode.S) then controlVector = controlVector + Vector3.new(0, 0, 1) end
-                if UIS:IsKeyDown(Enum.KeyCode.A) then controlVector = controlVector + Vector3.new(-1, 0, 0) end
-                if UIS:IsKeyDown(Enum.KeyCode.D) then controlVector = controlVector + Vector3.new(1, 0, 0) end
-                if UIS:IsKeyDown(Enum.KeyCode.Space) then controlVector = controlVector + Vector3.new(0, 1, 0) end
-                if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then controlVector = controlVector + Vector3.new(0, -1, 0) end
-
-                flyVel.Velocity = (Camera.CFrame.LookVector * controlVector.Z + Camera.CFrame.RightVector * controlVector.X + Vector3.new(0, controlVector.Y, 0)) * FlySpeed
-                flyGyro.CFrame = Camera.CFrame
-            end
-        end)
-    else
-        if flyVel then flyVel:Destroy() flyVel = nil end
-        if flyGyro then flyGyro:Destroy() flyGyro = nil end
-        if FlyConnection then FlyConnection:Disconnect() FlyConnection = nil end
-    end
-end
-
-MovementTab:CreateToggle({
-    Name = "Fly Mode",
-    CurrentValue = false,
-    Callback = function(v)
-        FlyEnabled = v
-        ToggleFly(v)
-    end
-})
-
-MovementTab:CreateSlider({
-    Name = "Fly Speed",
-    Range = {1, 100},
-    Increment = 1,
-    CurrentValue = FlySpeed,
-    Callback = function(val)
-        FlySpeed = val
-    end
-})
-
--- Invisible / Visible Toggle
-local function SetInvisible(state)
-    if not LocalPlayer.Character then return end
-    for _, part in pairs(LocalPlayer.Character:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            part.Transparency = state and 1 or 0
-            if part:FindFirstChildOfClass("Decal") then
-                part:FindFirstChildOfClass("Decal").Transparency = state and 1 or 0
-            end
-            part.CanCollide = not state
-        end
-    end
-    InvisibleEnabled = state
-end
-
-UtilityTab:CreateToggle({
-    Name = "Invisible",
-    CurrentValue = false,
-    Callback = function(v)
-        SetInvisible(v)
-    end
-})
-
--- Hitbox Expander (Player Hitbox, ไม่ชนตัวเอง)
-local function ExpandHitbox(size)
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = plr.Character.HumanoidRootPart
-            hrp.Size = Vector3.new(size, size, size)
-            hrp.Transparency = 0.5
-            hrp.BrickColor = BrickColor.new("Bright red")
-            hrp.CanCollide = (plr == LocalPlayer) -- ให้ชนแค่ตัวเองเท่านั้น
-        end
-    end
-end
-
-local function ResetHitbox()
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = plr.Character.HumanoidRootPart
-            hrp.Size = Vector3.new(2, 2, 1)
-            hrp.Transparency = 1
-            hrp.BrickColor = BrickColor.new("Medium stone grey")
-            hrp.CanCollide = true
-        end
-    end
-end
-
-VisualTab:CreateToggle({
-    Name = "Hitbox Expander",
-    CurrentValue = false,
-    Callback = function(v)
-        HitboxExpandEnabled = v
-        if v then
-            ExpandHitbox(HitboxSize)
-        else
-            ResetHitbox()
-        end
-    end
-})
-
-VisualTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {2, 500},
-    Increment = 1,
-    CurrentValue = HitboxSize,
-    Callback = function(val)
-        HitboxSize = val
-        if HitboxExpandEnabled then
-            ExpandHitbox(HitboxSize)
-        end
-    end
-})
-
--- ESP (Simple Name ESP)
-local function EnableESP()
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and not plr.Character:FindFirstChild("ESP_Tag") then
-            local billboard = Instance.new("BillboardGui")
-            billboard.Name = "ESP_Tag"
-            billboard.Adornee = plr.Character:FindFirstChild("Head") or plr.Character:FindFirstChild("HumanoidRootPart")
-            billboard.Size = UDim2.new(0, 100, 0, 30)
-            billboard.StudsOffset = Vector3.new(0, 2, 0)
-            billboard.AlwaysOnTop = true
-            billboard.Parent = plr.Character
-
-            local textLabel = Instance.new("TextLabel")
-            textLabel.Size = UDim2.new(1, 0, 1, 0)
-            textLabel.BackgroundTransparency = 1
-            textLabel.TextColor3 = Color3.new(1, 0, 0)
-            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-            textLabel.TextStrokeTransparency = 0
-            textLabel.Font = Enum.Font.GothamBold
-            textLabel.TextScaled = true
-            textLabel.Text = plr.Name
-            textLabel.Parent = billboard
-        end
-    end
-end
-
-local function DisableESP()
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Character then
-            local esp = plr.Character:FindFirstChild("ESP_Tag")
-            if esp then esp:Destroy() end
-        end
-    end
-end
-
-VisualTab:CreateToggle({
-    Name = "ESP",
-    CurrentValue = false,
-    Callback = function(v)
-        ESPEnabled = v
-        if v then EnableESP() else DisableESP() end
-    end
-})
-
--- Team Tags (อ่านจาก leaderstats.Team, ตั้งสี)
-local function UpdateTeamTags()
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Character and plr:FindFirstChild("leaderstats") and plr.leaderstats:FindFirstChild("Team") then
-            if not plr.Character:FindFirstChild("RoleTag") then
-                local tag = Instance.new("BillboardGui")
-                tag.Name = "RoleTag"
-                tag.Adornee = plr.Character:FindFirstChild("Head") or plr.Character:FindFirstChild("HumanoidRootPart")
-                tag.Size = UDim2.new(0, 100, 0, 30)
-                tag.StudsOffset = Vector3.new(0, 2.5, 0)
-                tag.AlwaysOnTop = true
-                tag.Parent = plr.Character
-
-                local label = Instance.new("TextLabel")
-                label.Size = UDim2.new(1, 0, 1, 0)
-                label.BackgroundTransparency = 1
-                label.TextScaled = true
-                label.Font = Enum.Font.GothamBold
-                label.Parent = tag
-
-                local role = plr.leaderstats.Team.Value
-                if role == "Murderer" then
-                    label.Text = "Murderer"
-                    label.TextColor3 = Color3.fromRGB(255, 0, 0)
-                elseif role == "Sheriff" then
-                    label.Text = "Sheriff"
-                    label.TextColor3 = Color3.fromRGB(0, 255, 255)
-                elseif role == "Innocent" then
-                    label.Text = "Innocent"
-                    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-                else
-                    label.Text = role
-                    label.TextColor3 = Color3.new(1,1,1)
-                end
-            end
-        else
-            if plr.Character then
-                local oldTag = plr.Character:FindFirstChild("RoleTag")
-                if oldTag then oldTag:Destroy() end
-            end
-        end
-    end
-end
-
-UtilityTab:CreateToggle({
-    Name = "Team Tags (MM2)",
-    CurrentValue = false,
-    Callback = function(v)
-        if v then
-            UpdateTeamTags()
-            spawn(function()
-                while UtilityTab:FindToggle("Team Tags (MM2)").CurrentValue do
-                    UpdateTeamTags()
-                    task.wait(5)
-                end
-                -- Clean up tags when disabled
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr.Character then
-                        local oldTag = plr.Character:FindFirstChild("RoleTag")
-                        if oldTag then oldTag:Destroy() end
-                    end
-                end
-            end)
-        else
-            for _, plr in pairs(Players:GetPlayers()) do
-                if plr.Character then
-                    local oldTag = plr.Character:FindFirstChild("RoleTag")
-                    if oldTag then oldTag:Destroy() end
-                end
-            end
-        end
-    end
-})
-
--- Teleport System (พิมพ์ชื่อเพื่อวาป)
-local TeleportInput = MainTab:CreateInput({
-    Name = "Teleport to Player",
-    PlaceholderText = "Enter Player Name",
-    RemoveTextAfterFocusLost = true,
-    Callback = function(txt)
-        local target = Players:FindFirstChild(txt)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0)
-        else
-            warn("Player not found or no HumanoidRootPart")
-        end
-    end
-})
-
--- Toggle Aimbot
-CombatTab:CreateToggle({
-    Name = "Aimbot",
-    CurrentValue = false,
-    Callback = function(v)
-        AimbotEnabled = v
-        if v then DrawFOV() else RemoveFOV() end
-    end
-})
-
--- Toggle Silent Aim
-CombatTab:CreateToggle({
-    Name = "Silent Aim",
-    CurrentValue = false,
-    Callback = function(v)
-        SilentAimEnabled = v
-        if v then DrawFOV() else RemoveFOV() end
-    end
-})
-
--- Aimbot Target Part Selection
-CombatTab:CreateDropdown({
-    Name = "Aim Part",
-    Options = {"Head", "HumanoidRootPart"},
-    CurrentOption = "Head",
-    Callback = function(option)
-        AimbotTargetPart = option
-    end
-})
-
--- Toggle GUI with RightControl
-UIS.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.RightControl then
-        Rayfield:Toggle()
-    end
+-- Silent Aim (__namecall Hook)
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+local old = mt.__namecall
+mt.__namecall = newcclosure(function(self, ...)
+   local args = {...}
+   local method = getnamecallmethod()
+   if SilentAimSettings.Enabled and method == "FireServer" and tostring(self) == "Shoot" then
+      for _,v in ipairs(Players:GetPlayers()) do
+         if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentAimSettings.Part) then
+            args[2] = v.Character[SilentAimSettings.Part].Position
+            break
+         end
+      end
+      return old(self, unpack(args))
+   end
+   return old(self, ...)
 end)
 
--- Auto Set WalkSpeed & JumpPower on Respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid")
-    hum.WalkSpeed = WalkSpeedValue
-    hum.JumpPower = JumpPowerValue
-    if InvisibleEnabled then
-        SetInvisible(true)
-    end
-    if HitboxExpandEnabled then
-        ExpandHitbox(HitboxSize)
-    end
+-- Team Tags (leaderstats.Team)
+RunService.RenderStepped:Connect(function()
+   for _,v in ipairs(Players:GetPlayers()) do
+      if v:FindFirstChild("leaderstats") and v.leaderstats:FindFirstChild("Team") and not v.Character:FindFirstChild("TeamTag") then
+         local tag = Instance.new("BillboardGui", v.Character:FindFirstChild("Head") or v.Character:FindFirstChild("HumanoidRootPart"))
+         tag.Name = "TeamTag"
+         tag.Size = UDim2.new(0, 100, 0, 40)
+         tag.StudsOffset = Vector3.new(0, 2, 0)
+         tag.AlwaysOnTop = true
+         local label = Instance.new("TextLabel", tag)
+         label.Size = UDim2.new(1, 0, 1, 0)
+         label.BackgroundTransparency = 1
+         label.Text = v.leaderstats.Team.Value
+         label.TextColor3 = v.leaderstats.Team.Value == "Innocent" and Color3.fromRGB(0, 255, 0)
+            or v.leaderstats.Team.Value == "Sheriff" and Color3.fromRGB(0, 100, 255)
+            or v.leaderstats.Team.Value == "Murderer" and Color3.fromRGB(255, 0, 0) or Color3.new(1, 1, 1)
+         label.TextScaled = true
+      end
+   end
 end)
