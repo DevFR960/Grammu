@@ -1,16 +1,16 @@
--- COCO HUB FULL SCRIPT (ENGLISH ONLY) - WITH KEY SYSTEM & FULL FEATURES
+-- COCO HUB with Key System & Full Features (Rayfield UI, English)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
--- Load Rayfield UI
+-- Load Rayfield UI (pcall to avoid crash)
 local success, Rayfield = pcall(function()
     return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 end)
 if not success or not Rayfield then
-    error("Failed to load Rayfield UI. Please check your executor or provide the UI module locally.")
+    error("Failed to load Rayfield UI. Check your executor or network.")
 end
 
 -- Key System Variables
@@ -40,20 +40,20 @@ KeyTab:CreateInput({
 })
 
 local function OpenMainGUI()
-    -- Wait until character is loaded
+    -- Wait until player's character and HumanoidRootPart are ready
     repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
     -- Feature variables
     local aimbotEnabled, silentAimbotEnabled, ESPEnabled = false, false, false
     local highJumpEnabled, walkSpeedToggle = false, false
-    local teamTagEnabled = false
+    local TeamTagEnabled = false
     local walkSpeedVal = 16
     local fov, silentFov = 100, 120
     local fovCircle, silentFovCircle, silentTarget
     local teamTags = {}
     local espHighlights = {}
 
-    -- Create main window
+    -- Create Main Window
     local Window = Rayfield:CreateWindow({
         Name = "🌈 COCO HUB",
         LoadingTitle = "COCO HUB",
@@ -65,7 +65,7 @@ local function OpenMainGUI()
 
     local Tab = Window:CreateTab("Main", 4483362458)
 
-    -- Aimbot toggle
+    -- Aimbot Toggle
     Tab:CreateToggle({
         Name = "Aimbot (FOV + Rainbow)",
         CurrentValue = false,
@@ -74,7 +74,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- Silent Aim toggle
+    -- Silent Aim Toggle
     Tab:CreateToggle({
         Name = "Silent Aimbot (Bullet Redirect)",
         CurrentValue = false,
@@ -83,7 +83,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- ESP toggle (Highlight)
+    -- ESP Toggle (Highlight)
     Tab:CreateToggle({
         Name = "ESP (Highlight Full Body)",
         CurrentValue = false,
@@ -98,7 +98,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- WalkSpeed slider + toggle
+    -- WalkSpeed Slider + Toggle
     Tab:CreateSlider({
         Name = "WalkSpeed",
         Range = {16, 200},
@@ -117,7 +117,7 @@ local function OpenMainGUI()
         end,
     })
 
-    -- High Jump toggle
+    -- High Jump Toggle
     Tab:CreateToggle({
         Name = "High Jump",
         CurrentValue = false,
@@ -126,29 +126,28 @@ local function OpenMainGUI()
         end,
     })
 
-    -- Team Tags toggle
+    -- Team Tags Toggle
     Tab:CreateToggle({
         Name = "Show Player Name Tags (MM2 Colors)",
         CurrentValue = false,
         Callback = function(state)
-            teamTagEnabled = state
+            TeamTagEnabled = state
 
-            -- Destroy existing tags first
+            -- Clear existing tags
             for _, tag in pairs(teamTags) do
-                if tag and tag.Parent then
-                    tag:Destroy()
-                end
+                if tag then tag:Destroy() end
             end
             table.clear(teamTags)
 
-            if teamTagEnabled then
+            if TeamTagEnabled then
                 task.spawn(function()
-                    while teamTagEnabled do
+                    while TeamTagEnabled do
                         task.wait(1)
                         for _, player in pairs(Players:GetPlayers()) do
                             if player ~= LocalPlayer and player.Character and not teamTags[player] then
                                 local head = player.Character:FindFirstChild("Head")
                                 if head then
+                                    -- Create BillboardGui
                                     local billboard = Instance.new("BillboardGui")
                                     billboard.Name = "TeamTag"
                                     billboard.Size = UDim2.new(0, 100, 0, 20)
@@ -156,18 +155,18 @@ local function OpenMainGUI()
                                     billboard.AlwaysOnTop = true
                                     billboard.StudsOffset = Vector3.new(0, 2.5, 0)
 
+                                    -- Create TextLabel
                                     local text = Instance.new("TextLabel")
                                     text.Size = UDim2.new(1, 0, 1, 0)
                                     text.BackgroundTransparency = 1
                                     text.Text = player.DisplayName or player.Name
 
-                                    -- Read team from leaderstats.Team or default to None
+                                    -- Determine team color by leaderstats.Team if exists
                                     local teamName = "None"
                                     if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
                                         teamName = player.leaderstats.Team.Value
                                     end
 
-                                    -- Set color by MM2 team
                                     if teamName == "Innocent" then
                                         text.TextColor3 = Color3.fromRGB(0, 255, 0)
                                     elseif teamName == "Sheriff" then
@@ -189,27 +188,12 @@ local function OpenMainGUI()
                             end
                         end
                     end
-                    -- Clean up tags on toggle off
-                    for _, tag in pairs(teamTags) do
-                        if tag and tag.Parent then
-                            tag:Destroy()
-                        end
-                    end
-                    table.clear(teamTags)
                 end)
-            else
-                -- Destroy all tags immediately if toggled off
-                for _, tag in pairs(teamTags) do
-                    if tag and tag.Parent then
-                        tag:Destroy()
-                    end
-                end
-                table.clear(teamTags)
             end
         end,
     })
 
-    -- RenderStepped update loop
+    -- Main RenderStepped Loop
     RunService.RenderStepped:Connect(function()
         local char = LocalPlayer.Character
         if char then
@@ -333,10 +317,10 @@ local function OpenMainGUI()
         return oldNamecall(self, ...)
     end)
 
-    print("[✅ COCO HUB LOADED SUCCESSFULLY] | Full Features Ready")
+    print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | Full Features Ready")
 end
 
--- Submit Key Button Callback
+-- Submit Key Button (Safe callback)
 KeyTab:CreateButton({
     Name = "✅ Submit Key",
     Callback = function()
@@ -347,7 +331,14 @@ KeyTab:CreateButton({
                 Duration = 3,
             })
             task.wait(1)
-            KeyWindow:Destroy()
+            if KeyWindow and KeyWindow.Destroy then
+                local successDestroy, err = pcall(function()
+                    KeyWindow:Destroy()
+                end)
+                if not successDestroy then
+                    warn("Failed to destroy KeyWindow:", err)
+                end
+            end
             keyAccepted = true
             OpenMainGUI()
         else
