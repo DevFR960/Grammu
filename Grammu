@@ -1,186 +1,362 @@
 
---==[🌼 Key System]===--
-
-local correctKey = "Flower"
-
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
-local Plr = Players.LocalPlayer
 
-local function promptKey()
- local screen = Instance.new("ScreenGui", CoreGui)
- screen.Name = "KeySystem"
-
- local box = Instance.new("TextBox", screen)
- box.Size = UDim2.new(0, 200, 0, 50)
- box.Position = UDim2.new(0.5, -100, 0.5, -25)
- box.PlaceholderText = "Enter Key"
- box.TextScaled = true
-
- local confirmed = false
-
- box.FocusLost:Connect(function(enter)
-  if enter and box.Text == correctKey then
-   screen:Destroy()
-   confirmed = true
-  else
-   box.Text = ""
-   box.PlaceholderText = "Incorrect! Try again."
-  end
- end)
-
- repeat task.wait() until confirmed
-end
-
-promptKey()
-
-
---==[🎮 Load Rayfield UI]===--
-
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-local Window = Rayfield:CreateWindow({
- Name = "COCO HUB - MM2",
- LoadingTitle = "COCO HUB",
- LoadingSubtitle = "by DevFR960",
- ConfigurationSaving = {Enabled = false},
- KeySystem = false,
-})
-
-
---==[👁️ Create Main Tab Section]===--
-
-local MainTab = Window:CreateTab("Main", 4483362458)
-local AimbotSection = MainTab:CreateSection("Combat")
-local MovementSection = MainTab:CreateSection("Movement")
-
-
---==[🎯 Aimbot & Silent Aimbot]===--
-
-local Camera = workspace.CurrentCamera
-local LockPart = "Head" -- or "HumanoidRootPart"
-
-local function getClosestTarget()
- local closest, dist = nil, math.huge
- for _, v in pairs(Players:GetPlayers()) do
-  if v ~= Plr and v.Character and v.Character:FindFirstChild(LockPart) then
-   local screenPos, onScreen = Camera:WorldToViewportPoint(v.Character[LockPart].Position)
-   if onScreen then
-    local mag = (Vector2.new(screenPos.X, screenPos.Y) - UserInputService:GetMouseLocation()).Magnitude
-    if mag < dist then
-     closest = v
-     dist = mag
-    end
-   end
-  end
- end
- return closest
-end
-
--- Bullet Redirect
-local __namecall
-__namecall = hookmetamethod(game, "__namecall", function(self, ...)
- local args = {...}
- local method = getnamecallmethod()
- if tostring(self) == "HitPart" and method == "FireServer" then
-  local target = getClosestTarget()
-  if target and target.Character and target.Character:FindFirstChild(LockPart) then
-   args[1] = target.Character[LockPart]
-   args[2] = target.Character[LockPart].Position
-   return __namecall(self, unpack(args))
-  end
- end
- return __namecall(self, ...)
-end)
-
-
---==[🚶 WalkSpeed & JumpPower]===--
-
-local Speed = 16
-local Jump = 50
-
-MainTab:CreateSlider({
- Name = "WalkSpeed",
- SectionParent = MovementSection,
- Range = {16, 200},
- Increment = 1,
- CurrentValue = Speed,
- Callback = function(v)
-  Speed = v
-  if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
-   Plr.Character.Humanoid.WalkSpeed = v
-  end
- end,
-})
-
-MainTab:CreateSlider({
- Name = "JumpPower",
- SectionParent = MovementSection,
- Range = {50, 200},
- Increment = 1,
- CurrentValue = Jump,
- Callback = function(v)
-  Jump = v
-  if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
-   Plr.Character.Humanoid.JumpPower = v
-  end
- end,
-})
-
-
---==[👀 ESP for Silent Aim Target]===--
-
-local espHighlight
 local RunService = game:GetService("RunService")
 
-RunService.RenderStepped:Connect(function()
- local target = getClosestTarget()
- if target and target.Character then
-  if not espHighlight then
-   espHighlight = Instance.new("Highlight", target.Character)
-   espHighlight.FillColor = Color3.fromRGB(255, 50, 50)
-   espHighlight.FillTransparency = 0.5
-   espHighlight.OutlineTransparency = 1
-  end
-  espHighlight.Adornee = target.Character
- else
-  if espHighlight then
-   espHighlight:Destroy()
-   espHighlight = nil
-  end
- end
-end)
+local UserInputService = game:GetService("UserInputService")
+
+local TweenService = game:GetService("TweenService")
+
+local Workspace = game:GetService("Workspace")
 
 
---==[🧑‍🤝‍🧑 MM2 Team Tags (Color-coded)]===--
 
-for _, v in pairs(Players:GetPlayers()) do
- if v:FindFirstChild("leaderstats") and not v.Character:FindFirstChild("BillboardGui") then
-  local tag = Instance.new("BillboardGui", v.Character:WaitForChild("Head"))
-  tag.Size = UDim2.new(0, 100, 0, 40)
-  tag.StudsOffset = Vector3.new(0, 2, 0)
-  tag.AlwaysOnTop = true
+local Plr = Players.LocalPlayer
 
-  local txt = Instance.new("TextLabel", tag)
-  txt.Size = UDim2.new(1, 0, 1, 0)
-  txt.BackgroundTransparency = 1
-  txt.TextScaled = true
-  txt.Font = Enum.Font.GothamBold
-  txt.TextColor3 = Color3.new(1, 1, 1)
+local Mouse = Plr:GetMouse()
 
-  local role = v.leaderstats:FindFirstChild("Team")
-  if role then
-   if role.Value == "Sheriff" then
-    txt.Text = "Sheriff"
-    txt.TextColor3 = Color3.fromRGB(0, 255, 255)
-   elseif role.Value == "Murderer" then
-    txt.Text = "Murderer"
-    txt.TextColor3 = Color3.fromRGB(255, 0, 0)
-   elseif role.Value == "Innocent" then
-    txt.Text = "Innocent"
-    txt.TextColor3 = Color3.fromRGB(255, 255, 255)
-   end
-  end
- end
+local Camera = Workspace.CurrentCamera
+
+
+
+repeat task.wait() until Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
+
+local HRP = Plr.Character:WaitForChild("HumanoidRootPart")
+
+
+
+-- UI (Rayfield must be loaded externally by user)
+
+local Rayfield = nil -- assign externally: local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+
+
+-- KEY SYSTEM
+
+local ValidKey = "Flower"
+
+local KeyEnabled = true
+
+
+
+-- FUNCTION TO VERIFY KEY
+
+local function VerifyKey(Input)
+
+    return Input == ValidKey
+
 end
+
+
+
+-- CONFIGURATION
+
+local Config = {
+
+    AimbotEnabled = false,
+
+    SilentAimEnabled = false,
+
+    ESPEnabled = false,
+
+    WalkSpeed = 16,
+
+    JumpPower = 50,
+
+    FlyEnabled = false,
+
+    Invisibility = false,
+
+    HitboxSize = 2,
+
+    LockPart = "Head", -- or "HumanoidRootPart"
+
+    TeamTagsEnabled = true
+
+}
+
+
+
+-- FUNCTION STORAGE (UI callbacks)
+
+local UISetupDone = false
+
+
+
+-- KEY GUI
+
+local function CreateKeyPrompt()
+
+    if Rayfield then
+
+        Rayfield:CreateWindow({
+
+            Name = "COCO HUB MM2",
+
+            LoadingTitle = "COCO HUB KEY SYSTEM",
+
+            LoadingSubtitle = "by DevFR960",
+
+            ConfigurationSaving = {
+
+                Enabled = false
+
+            },
+
+            KeySystem = true,
+
+            KeySettings = {
+
+                Title = "COCO HUB KEY",
+
+                Subtitle = "Enter the key to unlock",
+
+                Note = "Key = Flower",
+
+                FileName = "CocoKeyMM2"
+
+            }
+
+        })
+
+
+
+        Rayfield:PromptKey({
+
+            Callback = function(Input)
+
+                if VerifyKey(Input) then
+
+                    UISetupDone = true
+
+                end
+
+            end
+
+        })
+
+    else
+
+        warn("Rayfield UI is not loaded. Please assign Rayfield externally.")
+
+    end
+
+end
+
+
+
+-- MAIN UI
+
+local function CreateMainUI()
+
+    if not Rayfield then return end
+
+
+
+    local MainWindow = Rayfield:CreateWindow({ Name = "COCO HUB MM2", HidePremium = false })
+
+
+
+    local MainTab = MainWindow:CreateTab("⚙️ Main Functions", 4483362458)
+
+    local CombatTab = MainWindow:CreateTab("🎯 Combat", 4483362458)
+
+    local VisualTab = MainWindow:CreateTab("🔍 Visual", 4483362458)
+
+    local UtilityTab = MainWindow:CreateTab("🛠️ Utility", 4483362458)
+
+
+
+    -- Aimbot toggle
+
+    CombatTab:CreateToggle({
+
+        Name = "Aimbot",
+
+        CurrentValue = false,
+
+        Callback = function(Value)
+
+            Config.AimbotEnabled = Value
+
+        end
+
+    })
+
+
+
+    -- Silent Aimbot toggle
+
+    CombatTab:CreateToggle({
+
+        Name = "Silent Aimbot",
+
+        CurrentValue = false,
+
+        Callback = function(Value)
+
+            Config.SilentAimEnabled = Value
+
+        end
+
+    })
+
+
+
+    -- ESP toggle
+
+    VisualTab:CreateToggle({
+
+        Name = "ESP (Target Only)",
+
+        CurrentValue = false,
+
+        Callback = function(Value)
+
+            Config.ESPEnabled = Value
+
+        end
+
+    })
+
+
+
+    -- Speed slider
+
+    UtilityTab:CreateSlider({
+
+        Name = "WalkSpeed",
+
+        Range = {16, 200},
+
+        Increment = 1,
+
+        CurrentValue = 16,
+
+        Callback = function(Value)
+
+            Config.WalkSpeed = Value
+
+            Plr.Character.Humanoid.WalkSpeed = Value
+
+        end
+
+    })
+
+
+
+    -- Jump Power slider
+
+    UtilityTab:CreateSlider({
+
+        Name = "JumpPower",
+
+        Range = {50, 200},
+
+        Increment = 1,
+
+        CurrentValue = 50,
+
+        Callback = function(Value)
+
+            Config.JumpPower = Value
+
+            Plr.Character.Humanoid.JumpPower = Value
+
+        end
+
+    })
+
+
+
+    -- Hitbox Expander
+
+    UtilityTab:CreateSlider({
+
+        Name = "Hitbox Size",
+
+        Range = {2, 500},
+
+        Increment = 1,
+
+        CurrentValue = 2,
+
+        Callback = function(Value)
+
+            Config.HitboxSize = Value
+
+            for _, v in pairs(Players:GetPlayers()) do
+
+                if v ~= Plr and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+
+                    v.Character.HumanoidRootPart.Size = Vector3.new(Value, Value, Value)
+
+                    v.Character.HumanoidRootPart.Transparency = 0.7
+
+                    v.Character.HumanoidRootPart.Material = Enum.Material.Neon
+
+                end
+
+            end
+
+        end
+
+    })
+
+
+
+    -- Toggle Team Tags for MM2
+
+    VisualTab:CreateToggle({
+
+        Name = "Show Team Tags (MM2)",
+
+        CurrentValue = true,
+
+        Callback = function(Value)
+
+            Config.TeamTagsEnabled = Value
+
+        end
+
+    })
+
+
+
+    -- Lock Part selector
+
+    CombatTab:CreateDropdown({
+
+        Name = "Lock Part (Aimbot)",
+
+        Options = {"Head", "HumanoidRootPart"},
+
+        CurrentOption = "Head",
+
+        Callback = function(Option)
+
+            Config.LockPart = Option
+
+        end
+
+    })
+
+end
+
+
+
+-- EXECUTE FLOW
+
+CreateKeyPrompt()
+
+RunService.RenderStepped:Connect(function()
+
+    if UISetupDone and not Rayfield.UISetupDone then
+
+        CreateMainUI()
+
+        Rayfield.UISetupDone = true
+
+    end
+
+end)
