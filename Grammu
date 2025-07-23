@@ -1,59 +1,72 @@
--- COCO HUB with Rayfield UI, Key System, Team Tags & ESP Highlight
+-- COCO HUB with Key System & Full Features (Rayfield UI)
 
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-end)
-
-if not success or not Rayfield then
-    warn("❌ Failed to load Rayfield UI.")
-    return
-end
-
--- Key System
-local keyRequired = "Flower"
-local verified = false
-
-Rayfield:Notify({
-    Title = "COCO HUB",
-    Content = "Enter key to access the script",
-    Duration = 5
-})
-
-local KeyWindow = Rayfield:CreateWindow({
-    Name = "COCO HUB - Key System",
-    LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "Key Protected",
-    ConfigurationSaving = { Enabled = false },
-    Discord = { Enabled = false },
-    KeySystem = false
-})
-
-local KeyTab = KeyWindow:CreateTab("Authentication", 4483362458)
-
-KeyTab:CreateInput({
-    Name = "Enter Access Key",
-    PlaceholderText = "Enter Key Here",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(input)
-        if input == keyRequired then
-            verified = true
-            Rayfield:Notify({ Title = "Access Granted", Content = "Welcome to COCO HUB!", Duration = 3 })
-            wait(1)
-            KeyWindow:Destroy()
-        else
-            Rayfield:Notify({ Title = "Access Denied", Content = "Invalid Key. Try again.", Duration = 3 })
-        end
-    end
-})
-
-repeat task.wait() until verified
-
--- Main Code Starts Here
 local Players = game:GetService("Players")
-local Plr = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
-repeat task.wait() until Plr and Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
+
+-- Load Rayfield UI
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+-- Key System Variables
+local keyInput = ""
+local correctKey = "Flower"
+
+local KeyWindow = Rayfield:CreateWindow({
+    Name = "🔐 COCO HUB - Key System",
+    LoadingTitle = "COCO HUB",
+    LoadingSubtitle = "Enter Access Key",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false,
+})
+
+Rayfield:Notify({
+    Title = "Welcome to COCO HUB",
+    Content = "Please enter your access key",
+    Duration = 5,
+})
+
+-- Input for Key
+KeyWindow:CreateInput({
+    Name = "Enter Key",
+    PlaceholderText = "Type your key here...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(input)
+        keyInput = input
+    end,
+})
+
+local keyAccepted = false
+
+-- Submit Button
+KeyWindow:CreateButton({
+    Name = "✅ Submit Key",
+    Callback = function()
+        if keyInput == correctKey then
+            keyAccepted = true
+            Rayfield:Notify({
+                Title = "Access Granted",
+                Content = "Welcome to COCO HUB!",
+                Duration = 3,
+            })
+            task.wait(1)
+            KeyWindow:Destroy()
+        else
+            Rayfield:Notify({
+                Title = "Access Denied",
+                Content = "Invalid key. Try again.",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+-- Wait until key is accepted
+repeat task.wait() until keyAccepted
+
+-- Wait for character
+repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
 -- Variables
 local aimbotEnabled, silentAimbotEnabled, ESPEnabled = false, false, false
@@ -65,51 +78,49 @@ local fovCircle, silentFovCircle, silentTarget
 local teamTags = {}
 local espHighlights = {}
 
--- Main UI Window
+-- Main COCO HUB Window
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB",
+    Name = "🌈 COCO HUB",
     LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "with Rayfield UI",
+    LoadingSubtitle = "Loaded Features",
     ConfigurationSaving = { Enabled = false },
     Discord = { Enabled = false },
-    KeySystem = false
+    KeySystem = false,
 })
 
--- Main Tab
 local Tab = Window:CreateTab("Main", 4483362458)
 
--- Aimbot
+-- Aimbot Toggle
 Tab:CreateToggle({
     Name = "Aimbot (FOV + Rainbow)",
     CurrentValue = false,
     Callback = function(state)
         aimbotEnabled = state
-    end
+    end,
 })
 
--- Silent Aimbot
+-- Silent Aim Toggle
 Tab:CreateToggle({
     Name = "Silent Aimbot (Bullet Redirect)",
     CurrentValue = false,
     Callback = function(state)
         silentAimbotEnabled = state
-    end
+    end,
 })
 
--- ESP Toggle (Highlight Full Body)
+-- ESP Toggle (Highlight)
 Tab:CreateToggle({
     Name = "ESP (Highlight Full Body)",
     CurrentValue = false,
     Callback = function(state)
         ESPEnabled = state
         if not ESPEnabled then
-            -- Remove all ESP highlights when turned off
             for _, hl in pairs(espHighlights) do
                 if hl then hl:Destroy() end
             end
             espHighlights = {}
         end
-    end
+    end,
 })
 
 -- WalkSpeed Slider + Toggle
@@ -120,7 +131,7 @@ Tab:CreateSlider({
     CurrentValue = walkSpeedVal,
     Callback = function(val)
         walkSpeedVal = val
-    end
+    end,
 })
 
 Tab:CreateToggle({
@@ -128,21 +139,21 @@ Tab:CreateToggle({
     CurrentValue = false,
     Callback = function(state)
         walkSpeedToggle = state
-    end
+    end,
 })
 
--- High Jump
+-- High Jump Toggle
 Tab:CreateToggle({
     Name = "High Jump",
     CurrentValue = false,
     Callback = function(state)
         highJumpEnabled = state
-    end
+    end,
 })
 
--- Team Tags (Name Tags with MM2 Team Colors)
+-- Team Tags Toggle
 Tab:CreateToggle({
-    Name = "Show Player Name Tags (Above Players)",
+    Name = "Show Player Name Tags (MM2 Colors)",
     CurrentValue = false,
     Callback = function(state)
         TeamTagEnabled = state
@@ -156,7 +167,7 @@ Tab:CreateToggle({
                 while TeamTagEnabled do
                     task.wait(1)
                     for _, player in pairs(Players:GetPlayers()) do
-                        if player ~= Plr and player.Character and not teamTags[player] then
+                        if player ~= LocalPlayer and player.Character and not teamTags[player] then
                             local head = player.Character:FindFirstChild("Head")
                             if head then
                                 local billboard = Instance.new("BillboardGui")
@@ -171,19 +182,18 @@ Tab:CreateToggle({
                                 text.BackgroundTransparency = 1
                                 text.Text = player.DisplayName or player.Name
 
-                                -- Set color based on MM2 team name (leaderstats.Team)
                                 local teamName = "None"
                                 if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
                                     teamName = player.leaderstats.Team.Value
                                 end
                                 if teamName == "Innocent" then
-                                    text.TextColor3 = Color3.fromRGB(0, 255, 0) -- สีเขียว
+                                    text.TextColor3 = Color3.fromRGB(0, 255, 0)
                                 elseif teamName == "Sheriff" then
-                                    text.TextColor3 = Color3.fromRGB(0, 0, 255) -- สีน้ำเงิน
+                                    text.TextColor3 = Color3.fromRGB(0, 0, 255)
                                 elseif teamName == "Murderer" then
-                                    text.TextColor3 = Color3.fromRGB(255, 0, 0) -- แดง
+                                    text.TextColor3 = Color3.fromRGB(255, 0, 0)
                                 else
-                                    text.TextColor3 = Color3.fromRGB(255, 255, 0) -- เหลือง (ทีมอื่นๆ หรือไม่มีทีม)
+                                    text.TextColor3 = Color3.fromRGB(255, 255, 0)
                                 end
 
                                 text.TextStrokeTransparency = 0.5
@@ -199,18 +209,29 @@ Tab:CreateToggle({
                 end
             end)
         end
-    end
+    end,
 })
 
--- Main Loop
+-- Auto Refresh Player List every 10 seconds (optional, just example)
+task.spawn(function()
+    while true do
+        task.wait(10)
+        -- Could add code to refresh UI dropdowns if you add player lists
+    end
+end)
+
+-- Main RenderStepped Loop
 RunService.RenderStepped:Connect(function()
-    local hum = Plr.Character and Plr.Character:FindFirstChild("Humanoid")
-    if hum then
-        hum.WalkSpeed = walkSpeedToggle and walkSpeedVal or 16
-        hum.JumpPower = highJumpEnabled and 100 or 50
+    local char = LocalPlayer.Character
+    if char then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = walkSpeedToggle and walkSpeedVal or 16
+            humanoid.JumpPower = highJumpEnabled and 100 or 50
+        end
     end
 
-    -- Aimbot FOV
+    -- Aimbot FOV Circle
     if aimbotEnabled then
         if not fovCircle then
             fovCircle = Drawing.new("Circle")
@@ -225,7 +246,7 @@ RunService.RenderStepped:Connect(function()
 
         local closest, dist = nil, math.huge
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
                 local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
                 if onScreen then
                     local d = (Vector2.new(pos.X, pos.Y) - fovCircle.Position).Magnitude
@@ -235,6 +256,7 @@ RunService.RenderStepped:Connect(function()
                 end
             end
         end
+
         if closest then
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Position)
         end
@@ -243,7 +265,7 @@ RunService.RenderStepped:Connect(function()
         fovCircle = nil
     end
 
-    -- Silent Aim
+    -- Silent Aim FOV Circle & Target
     if silentAimbotEnabled then
         if not silentFovCircle then
             silentFovCircle = Drawing.new("Circle")
@@ -253,12 +275,13 @@ RunService.RenderStepped:Connect(function()
             silentFovCircle.Filled = false
             silentFovCircle.Visible = true
         end
+
         silentFovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
         silentFovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
 
         local closest, dist = nil, math.huge
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= Plr and p.Character and p.Character:FindFirstChild("Head") then
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
                 local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
                 if onScreen then
                     local d = (Vector2.new(pos.X, pos.Y) - silentFovCircle.Position).Magnitude
@@ -268,6 +291,7 @@ RunService.RenderStepped:Connect(function()
                 end
             end
         end
+
         silentTarget = closest
     elseif silentFovCircle then
         silentFovCircle:Remove()
@@ -275,17 +299,17 @@ RunService.RenderStepped:Connect(function()
         silentTarget = nil
     end
 
-    -- ESP Highlights Update
+    -- ESP Highlight Update
     if ESPEnabled then
         for _, player in pairs(Players:GetPlayers()) do
-            if player ~= Plr and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
                 if not espHighlights[player] then
                     local hl = Instance.new("Highlight")
                     hl.Name = "ESP_Highlight"
                     hl.Adornee = player.Character
-                    hl.FillColor = Color3.fromRGB(0, 255, 0) -- สีเขียวเต็มตัว
-                    hl.OutlineColor = Color3.fromRGB(50, 255, 50) -- สีเส้นขอบเขียวอ่อน
-                    hl.FillTransparency = 0.6 -- ปรับโปร่งแสงตามชอบ
+                    hl.FillColor = Color3.fromRGB(0, 255, 0)
+                    hl.OutlineColor = Color3.fromRGB(50, 255, 50)
+                    hl.FillTransparency = 0.6
                     hl.OutlineTransparency = 0
                     hl.Parent = player.Character
                     espHighlights[player] = hl
@@ -306,19 +330,18 @@ end)
 -- Bullet Redirect Hook for Silent Aim
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
-local old = mt.__namecall
+local oldNamecall = mt.__namecall
 
 mt.__namecall = newcclosure(function(self, ...)
-    local args = { ... }
+    local args = {...}
     local method = getnamecallmethod()
     if tostring(method) == "FireServer" and tostring(self.Name) == "Shoot" then
-    
-    if silentAimbotEnabled and silentTarget and typeof(args[1]) == "Vector3" then
+        if silentAimbotEnabled and silentTarget and typeof(args[1]) == "Vector3" then
             args[1] = silentTarget.Position + Vector3.new(0, 1.5, 0)
-            return old(self, unpack(args))
+            return oldNamecall(self, unpack(args))
         end
     end
-    return old(self, ...)
+    return oldNamecall(self, ...)
 end)
 
-print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | TeamTag & ESP Highlight Enabled")
+print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | Full Features Ready")
