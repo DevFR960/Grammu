@@ -36,6 +36,9 @@ KeyTab:CreateInput({
     end,
 })
 
+-- Forward declaration of main GUI function
+local function OpenMainGUI() end
+
 -- Submit Button
 KeyTab:CreateButton({
     Name = "✅ Submit Key",
@@ -47,8 +50,14 @@ KeyTab:CreateButton({
                 Duration = 3,
             })
             task.wait(1)
-            KeyWindow:Destroy()
+            local success, err = pcall(function()
+                KeyWindow:Destroy()
+            end)
+            if not success then
+                warn("Failed to destroy KeyWindow:", err)
+            end
             keyAccepted = true
+            OpenMainGUI()
         else
             Rayfield:Notify({
                 Title = "Access Denied",
@@ -59,278 +68,281 @@ KeyTab:CreateButton({
     end,
 })
 
--- Wait until key is accepted
-repeat task.wait() until keyAccepted
+-- ฟังก์ชันสร้าง GUI หลัก พร้อมระบบทั้งหมด
+function OpenMainGUI()
+    -- Wait for character
+    repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
--- Wait for player character
-repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    -- Variables
+    local aimbotEnabled, silentAimbotEnabled, ESPEnabled = false, false, false
+    local highJumpEnabled, walkSpeedToggle = false, false
+    local TeamTagEnabled = false
+    local walkSpeedVal = 16
+    local fov, silentFov = 100, 120
+    local fovCircle, silentFovCircle, silentTarget
+    local teamTags = {}
+    local espHighlights = {}
 
--- Variables
-local aimbotEnabled, silentAimbotEnabled, ESPEnabled = false, false, false
-local highJumpEnabled, walkSpeedToggle = false, false
-local TeamTagEnabled = false
-local walkSpeedVal = 16
-local fov, silentFov = 100, 120
-local fovCircle, silentFovCircle, silentTarget
-local teamTags = {}
-local espHighlights = {}
+    -- Create Main Window
+    local Window = Rayfield:CreateWindow({
+        Name = "🌈 COCO HUB",
+        LoadingTitle = "COCO HUB",
+        LoadingSubtitle = "Loaded Features",
+        ConfigurationSaving = { Enabled = false },
+        Discord = { Enabled = false },
+        KeySystem = false,
+    })
 
--- Main COCO HUB Window
-local Window = Rayfield:CreateWindow({
-    Name = "🌈 COCO HUB",
-    LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "Loaded Features",
-    ConfigurationSaving = { Enabled = false },
-    Discord = { Enabled = false },
-    KeySystem = false,
-})
+    local Tab = Window:CreateTab("Main", 4483362458)
 
-local Tab = Window:CreateTab("Main", 4483362458)
+    -- Aimbot Toggle
+    Tab:CreateToggle({
+        Name = "Aimbot (FOV + Rainbow)",
+        CurrentValue = false,
+        Callback = function(state)
+            aimbotEnabled = state
+        end,
+    })
 
--- Aimbot Toggle
-Tab:CreateToggle({
-    Name = "Aimbot (FOV + Rainbow)",
-    CurrentValue = false,
-    Callback = function(state)
-        aimbotEnabled = state
-    end,
-})
+    -- Silent Aim Toggle
+    Tab:CreateToggle({
+        Name = "Silent Aimbot (Bullet Redirect)",
+        CurrentValue = false,
+        Callback = function(state)
+            silentAimbotEnabled = state
+        end,
+    })
 
--- Silent Aim Toggle
-Tab:CreateToggle({
-    Name = "Silent Aimbot (Bullet Redirect)",
-    CurrentValue = false,
-    Callback = function(state)
-        silentAimbotEnabled = state
-    end,
-})
+    -- ESP Toggle (Highlight)
+    Tab:CreateToggle({
+        Name = "ESP (Highlight Full Body)",
+        CurrentValue = false,
+        Callback = function(state)
+            ESPEnabled = state
+            if not ESPEnabled then
+                for _, hl in pairs(espHighlights) do
+                    if hl then hl:Destroy() end
+                end
+                espHighlights = {}
+            end
+        end,
+    })
 
--- ESP Toggle (Highlight)
-Tab:CreateToggle({
-    Name = "ESP (Highlight Full Body)",
-    CurrentValue = false,
-    Callback = function(state)
-        ESPEnabled = state
-        if not ESPEnabled then
+    -- WalkSpeed Slider + Toggle
+    Tab:CreateSlider({
+        Name = "WalkSpeed",
+        Range = {16, 200},
+        Increment = 1,
+        CurrentValue = walkSpeedVal,
+        Callback = function(val)
+            walkSpeedVal = val
+        end,
+    })
+
+    Tab:CreateToggle({
+        Name = "Enable WalkSpeed",
+        CurrentValue = false,
+        Callback = function(state)
+            walkSpeedToggle = state
+        end,
+    })
+
+    -- High Jump Toggle
+    Tab:CreateToggle({
+        Name = "High Jump",
+        CurrentValue = false,
+        Callback = function(state)
+            highJumpEnabled = state
+        end,
+    })
+
+    -- Team Tags Toggle
+    Tab:CreateToggle({
+        Name = "Show Player Name Tags (MM2 Colors)",
+        CurrentValue = false,
+        Callback = function(state)
+            TeamTagEnabled = state
+            for _, tag in pairs(teamTags) do
+                if tag then tag:Destroy() end
+            end
+            table.clear(teamTags)
+
+            if TeamTagEnabled then
+                task.spawn(function()
+                    while TeamTagEnabled do
+                        task.wait(1)
+                        for _, player in pairs(Players:GetPlayers()) do
+                            if player ~= LocalPlayer and player.Character and not teamTags[player] then
+                                local head = player.Character:FindFirstChild("Head")
+                                if head then
+                                    local billboard = Instance.new("BillboardGui")
+                                    billboard.Name = "TeamTag"
+                                    billboard.Size = UDim2.new(0, 100, 0, 20)
+                                    billboard.Adornee = head
+                                    billboard.AlwaysOnTop = true
+                                    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+
+                                    local text = Instance.new("TextLabel")
+                                    text.Size = UDim2.new(1, 0, 1, 0)
+                                    text.BackgroundTransparency = 1
+                                    text.Text = player.DisplayName or player.Name
+
+                                    local teamName = "None"
+                                    if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
+                                        teamName = player.leaderstats.Team.Value
+                                    end
+                                    if teamName == "Innocent" then
+                                        text.TextColor3 = Color3.fromRGB(0, 255, 0)
+                                    elseif teamName == "Sheriff" then
+                                        text.TextColor3 = Color3.fromRGB(0, 0, 255)
+                                    elseif teamName == "Murderer" then
+                                        text.TextColor3 = Color3.fromRGB(255, 0, 0)
+                                    else
+                                        text.TextColor3 = Color3.fromRGB(255, 255, 0)
+                                    end
+
+                                    text.TextStrokeTransparency = 0.5
+                                    text.Font = Enum.Font.GothamBold
+                                    text.TextScaled = true
+                                    text.Parent = billboard
+
+                                    billboard.Parent = head
+                                    teamTags[player] = billboard
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end,
+    })
+
+    -- Main RenderStepped Loop
+    RunService.RenderStepped:Connect(function()
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = walkSpeedToggle and walkSpeedVal or 16
+                humanoid.JumpPower = highJumpEnabled and 100 or 50
+            end
+        end
+
+        -- Aimbot FOV Circle
+        if aimbotEnabled then
+            if not fovCircle then
+                fovCircle = Drawing.new("Circle")
+                fovCircle.Thickness = 2
+                fovCircle.Transparency = 0.5
+                fovCircle.Radius = fov
+                fovCircle.Filled = false
+                fovCircle.Visible = true
+            end
+            fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            fovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+
+            local closest, dist = nil, math.huge
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+                    local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
+                    if onScreen then
+                        local d = (Vector2.new(pos.X, pos.Y) - fovCircle.Position).Magnitude
+                        if d < fov and d < dist then
+                            closest, dist = p.Character.Head, d
+                        end
+                    end
+                end
+            end
+
+            if closest then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Position)
+            end
+        elseif fovCircle then
+            fovCircle:Remove()
+            fovCircle = nil
+        end
+
+        -- Silent Aim FOV Circle & Target
+        if silentAimbotEnabled then
+            if not silentFovCircle then
+                silentFovCircle = Drawing.new("Circle")
+                silentFovCircle.Thickness = 2
+                silentFovCircle.Transparency = 0.5
+                silentFovCircle.Radius = silentFov
+                silentFovCircle.Filled = false
+                silentFovCircle.Visible = true
+            end
+
+            silentFovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            silentFovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+
+            local closest, dist = nil, math.huge
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+                    local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
+                    if onScreen then
+                        local d = (Vector2.new(pos.X, pos.Y) - silentFovCircle.Position).Magnitude
+                        if d < silentFov and d < dist then
+                            closest, dist = p.Character.Head, d
+                        end
+                    end
+                end
+            end
+
+            silentTarget = closest
+        elseif silentFovCircle then
+            silentFovCircle:Remove()
+            silentFovCircle = nil
+            silentTarget = nil
+        end
+
+        -- ESP Highlight Update
+        if ESPEnabled then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+                    if not espHighlights[player] then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "ESP_Highlight"
+                        hl.Adornee = player.Character
+                        hl.FillColor = Color3.fromRGB(0, 255, 0)
+                        hl.OutlineColor = Color3.fromRGB(50, 255, 50)
+                        hl.FillTransparency = 0.6
+                        hl.OutlineTransparency = 0
+                        hl.Parent = player.Character
+                        espHighlights[player] = hl
+                    end
+                elseif espHighlights[player] then
+                    espHighlights[player]:Destroy()
+                    espHighlights[player] = nil
+                end
+            end
+        else
             for _, hl in pairs(espHighlights) do
                 if hl then hl:Destroy() end
             end
             espHighlights = {}
         end
-    end,
-})
+    end)
 
--- WalkSpeed Slider + Toggle
-Tab:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16, 200},
-    Increment = 1,
-    CurrentValue = walkSpeedVal,
-    Callback = function(val)
-        walkSpeedVal = val
-    end,
-})
+    -- Bullet Redirect Hook for Silent Aim
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldNamecall = mt.__namecall
 
-Tab:CreateToggle({
-    Name = "Enable WalkSpeed",
-    CurrentValue = false,
-    Callback = function(state)
-        walkSpeedToggle = state
-    end,
-})
-
--- High Jump Toggle
-Tab:CreateToggle({
-    Name = "High Jump",
-    CurrentValue = false,
-    Callback = function(state)
-        highJumpEnabled = state
-    end,
-})
-
--- Team Tags Toggle
-Tab:CreateToggle({
-    Name = "Show Player Name Tags (MM2 Colors)",
-    CurrentValue = false,
-    Callback = function(state)
-        TeamTagEnabled = state
-        for _, tag in pairs(teamTags) do
-            if tag then tag:Destroy() end
-        end
-        table.clear(teamTags)
-
-        if TeamTagEnabled then
-            task.spawn(function()
-                while TeamTagEnabled do
-                    task.wait(1)
-                    for _, player in pairs(Players:GetPlayers()) do
-                        if player ~= LocalPlayer and player.Character and not teamTags[player] then
-                            local head = player.Character:FindFirstChild("Head")
-                            if head then
-                                local billboard = Instance.new("BillboardGui")
-                                billboard.Name = "TeamTag"
-                                billboard.Size = UDim2.new(0, 100, 0, 20)
-                                billboard.Adornee = head
-                                billboard.AlwaysOnTop = true
-                                billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-
-                                local text = Instance.new("TextLabel")
-                                text.Size = UDim2.new(1, 0, 1, 0)
-                                text.BackgroundTransparency = 1
-                                text.Text = player.DisplayName or player.Name
-
-                                local teamName = "None"
-                                if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
-                                    teamName = player.leaderstats.Team.Value
-                                end
-                                if teamName == "Innocent" then
-                                    text.TextColor3 = Color3.fromRGB(0, 255, 0)
-                                elseif teamName == "Sheriff" then
-                                    text.TextColor3 = Color3.fromRGB(0, 0, 255)
-                                elseif teamName == "Murderer" then
-                                    text.TextColor3 = Color3.fromRGB(255, 0, 0)
-                                else
-                                    text.TextColor3 = Color3.fromRGB(255, 255, 0)
-                                end
-
-                                text.TextStrokeTransparency = 0.5
-                                text.Font = Enum.Font.GothamBold
-                                text.TextScaled = true
-                                text.Parent = billboard
-
-                                billboard.Parent = head
-                                teamTags[player] = billboard
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end,
-})
-
--- Main RenderStepped Loop
-RunService.RenderStepped:Connect(function()
-    local char = LocalPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = walkSpeedToggle and walkSpeedVal or 16
-            humanoid.JumpPower = highJumpEnabled and 100 or 50
-        end
-    end
-
-    -- Aimbot FOV Circle
-    if aimbotEnabled then
-        if not fovCircle then
-            fovCircle = Drawing.new("Circle")
-            fovCircle.Thickness = 2
-            fovCircle.Transparency = 0.5
-            fovCircle.Radius = fov
-            fovCircle.Filled = false
-            fovCircle.Visible = true
-        end
-        fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        fovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
-
-        local closest, dist = nil, math.huge
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-                if onScreen then
-                    local d = (Vector2.new(pos.X, pos.Y) - fovCircle.Position).Magnitude
-                    if d < fov and d < dist then
-                        closest, dist = p.Character.Head, d
-                    end
-                end
+    mt.__namecall = newcclosure(function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+        if tostring(method) == "FireServer" and tostring(self.Name) == "Shoot" then
+            if silentAimbotEnabled and silentTarget and typeof(args[1]) == "Vector3" then
+                args[1] = silentTarget.Position + Vector3.new(0, 1.5, 0)
+                return oldNamecall(self, unpack(args))
             end
         end
+        return oldNamecall(self, ...)
+    end)
 
-        if closest then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Position)
-        end
-    elseif fovCircle then
-        fovCircle:Remove()
-        fovCircle = nil
-    end
+    print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | Full Features Ready")
+end
 
-    -- Silent Aim FOV Circle & Target
-    if silentAimbotEnabled then
-        if not silentFovCircle then
-            silentFovCircle = Drawing.new("Circle")
-            silentFovCircle.Thickness = 2
-            silentFovCircle.Transparency = 0.5
-            silentFovCircle.Radius = silentFov
-            silentFovCircle.Filled = false
-            silentFovCircle.Visible = true
-        end
+-- ระบบจะเริ่มที่หน้าต่างคีย์ เมื่อใส่ถูกต้องจะโหลด GUI หลักอัตโนมัติ
 
-        silentFovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        silentFovCircle.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
-
-        local closest, dist = nil, math.huge
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-                if onScreen then
-                    local d = (Vector2.new(pos.X, pos.Y) - silentFovCircle.Position).Magnitude
-                    if d < silentFov and d < dist then
-                        closest, dist = p.Character.Head, d
-                    end
-                end
-            end
-        end
-
-        silentTarget = closest
-    elseif silentFovCircle then
-        silentFovCircle:Remove()
-        silentFovCircle = nil
-        silentTarget = nil
-    end
-
-    -- ESP Highlight Update
-    if ESPEnabled then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-                if not espHighlights[player] then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "ESP_Highlight"
-                    hl.Adornee = player.Character
-                    hl.FillColor = Color3.fromRGB(0, 255, 0)
-                    hl.OutlineColor = Color3.fromRGB(50, 255, 50)
-                    hl.FillTransparency = 0.6
-                    hl.OutlineTransparency = 0
-                    hl.Parent = player.Character
-                    espHighlights[player] = hl
-                end
-            elseif espHighlights[player] then
-                espHighlights[player]:Destroy()
-                espHighlights[player] = nil
-            end
-        end
-    else
-        for _, hl in pairs(espHighlights) do
-            if hl then hl:Destroy() end
-        end
-        espHighlights = {}
-    end
-end)
-
--- Bullet Redirect Hook for Silent Aim
-local mt = getrawmetatable(game)
-setreadonly(mt, false)
-local oldNamecall = mt.__namecall
-
-mt.__namecall = newcclosure(function(self, ...)
-    local args = {...}
-    local method = getnamecallmethod()
-    if tostring(method) == "FireServer" and tostring(self.Name) == "Shoot" then
-        if silentAimbotEnabled and silentTarget and typeof(args[1]) == "Vector3" then
-            args[1] = silentTarget.Position + Vector3.new(0, 1.5, 0)
-            return oldNamecall(self, unpack(args))
-        end
-    end
-    return oldNamecall(self, ...)
-end)
-
-print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | Full Features Ready")
