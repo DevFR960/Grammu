@@ -1,362 +1,183 @@
-
-local Players = game:GetService("Players")
-
-local RunService = game:GetService("RunService")
-
-local UserInputService = game:GetService("UserInputService")
-
-local TweenService = game:GetService("TweenService")
-
-local Workspace = game:GetService("Workspace")
-
-
-
-local Plr = Players.LocalPlayer
-
+--// COCO HUB - DELTA MM2 (NO LOADSTRING, NO HTTPGET, FULL OFFLINE)
+local Plr = game.Players.LocalPlayer
 local Mouse = Plr:GetMouse()
+local Camera = workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
 
-local Camera = Workspace.CurrentCamera
+local GUI = Instance.new("ScreenGui", Plr:WaitForChild("PlayerGui"))
+GUI.Name = "COCO_HUB"
+local Frame = Instance.new("Frame", GUI)
+Frame.Size = UDim2.new(0, 300, 0, 400)
+Frame.Position = UDim2.new(0.5, -150, 0.5, -200)
+Frame.BackgroundColor3 = Color3.new(0, 0, 0)
+Frame.BackgroundTransparency = 0.3
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
 
-
-
-repeat task.wait() until Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
-
-local HRP = Plr.Character:WaitForChild("HumanoidRootPart")
-
-
-
--- UI (Rayfield must be loaded externally by user)
-
-local Rayfield = nil -- assign externally: local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-
-
-
--- KEY SYSTEM
-
-local ValidKey = "Flower"
-
-local KeyEnabled = true
-
-
-
--- FUNCTION TO VERIFY KEY
-
-local function VerifyKey(Input)
-
-    return Input == ValidKey
-
+local function createButton(text, y, callback)
+	local btn = Instance.new("TextButton", Frame)
+	btn.Size = UDim2.new(1, -10, 0, 30)
+	btn.Position = UDim2.new(0, 5, 0, y)
+	btn.Text = text
+	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.TextScaled = true
+	btn.MouseButton1Click:Connect(callback)
+	return btn
 end
 
+-- Variables
+local walkSpeed = 16
+local jumpPower = 50
+local aimbotEnabled = false
+local silentAimEnabled = false
+local espEnabled = false
+local lockPart = "Head" -- or "HumanoidRootPart"
+local teamTags = true
 
-
--- CONFIGURATION
-
-local Config = {
-
-    AimbotEnabled = false,
-
-    SilentAimEnabled = false,
-
-    ESPEnabled = false,
-
-    WalkSpeed = 16,
-
-    JumpPower = 50,
-
-    FlyEnabled = false,
-
-    Invisibility = false,
-
-    HitboxSize = 2,
-
-    LockPart = "Head", -- or "HumanoidRootPart"
-
-    TeamTagsEnabled = true
-
-}
-
-
-
--- FUNCTION STORAGE (UI callbacks)
-
-local UISetupDone = false
-
-
-
--- KEY GUI
-
-local function CreateKeyPrompt()
-
-    if Rayfield then
-
-        Rayfield:CreateWindow({
-
-            Name = "COCO HUB MM2",
-
-            LoadingTitle = "COCO HUB KEY SYSTEM",
-
-            LoadingSubtitle = "by DevFR960",
-
-            ConfigurationSaving = {
-
-                Enabled = false
-
-            },
-
-            KeySystem = true,
-
-            KeySettings = {
-
-                Title = "COCO HUB KEY",
-
-                Subtitle = "Enter the key to unlock",
-
-                Note = "Key = Flower",
-
-                FileName = "CocoKeyMM2"
-
-            }
-
-        })
-
-
-
-        Rayfield:PromptKey({
-
-            Callback = function(Input)
-
-                if VerifyKey(Input) then
-
-                    UISetupDone = true
-
-                end
-
-            end
-
-        })
-
-    else
-
-        warn("Rayfield UI is not loaded. Please assign Rayfield externally.")
-
-    end
-
+-- MM2 Team Tag System
+local function applyTeamTags()
+	for _, player in ipairs(game.Players:GetPlayers()) do
+		if player ~= Plr then
+			local tag = player:FindFirstChild("Role") or player:FindFirstChild("role") or player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team")
+			if tag then
+				local color = Color3.new(1,1,1)
+				local txt = tostring(tag.Value)
+				if txt:lower() == "innocent" then color = Color3.fromRGB(0,255,0)
+				elseif txt:lower() == "sheriff" then color = Color3.fromRGB(0,0,255)
+				elseif txt:lower() == "murderer" then color = Color3.fromRGB(255,0,0)
+				end
+				if not player:FindFirstChild("COCOTag") then
+					local bill = Instance.new("BillboardGui", player.Character:WaitForChild("Head"))
+					bill.Name = "COCOTag"
+					bill.Size = UDim2.new(0,100,0,30)
+					bill.StudsOffset = Vector3.new(0,2,0)
+					bill.AlwaysOnTop = true
+					local txtlbl = Instance.new("TextLabel", bill)
+					txtlbl.Size = UDim2.new(1,0,1,0)
+					txtlbl.Text = txt
+					txtlbl.BackgroundTransparency = 1
+					txtlbl.TextColor3 = color
+					txtlbl.TextScaled = true
+				end
+			end
+		end
+	end
 end
 
-
-
--- MAIN UI
-
-local function CreateMainUI()
-
-    if not Rayfield then return end
-
-
-
-    local MainWindow = Rayfield:CreateWindow({ Name = "COCO HUB MM2", HidePremium = false })
-
-
-
-    local MainTab = MainWindow:CreateTab("⚙️ Main Functions", 4483362458)
-
-    local CombatTab = MainWindow:CreateTab("🎯 Combat", 4483362458)
-
-    local VisualTab = MainWindow:CreateTab("🔍 Visual", 4483362458)
-
-    local UtilityTab = MainWindow:CreateTab("🛠️ Utility", 4483362458)
-
-
-
-    -- Aimbot toggle
-
-    CombatTab:CreateToggle({
-
-        Name = "Aimbot",
-
-        CurrentValue = false,
-
-        Callback = function(Value)
-
-            Config.AimbotEnabled = Value
-
-        end
-
-    })
-
-
-
-    -- Silent Aimbot toggle
-
-    CombatTab:CreateToggle({
-
-        Name = "Silent Aimbot",
-
-        CurrentValue = false,
-
-        Callback = function(Value)
-
-            Config.SilentAimEnabled = Value
-
-        end
-
-    })
-
-
-
-    -- ESP toggle
-
-    VisualTab:CreateToggle({
-
-        Name = "ESP (Target Only)",
-
-        CurrentValue = false,
-
-        Callback = function(Value)
-
-            Config.ESPEnabled = Value
-
-        end
-
-    })
-
-
-
-    -- Speed slider
-
-    UtilityTab:CreateSlider({
-
-        Name = "WalkSpeed",
-
-        Range = {16, 200},
-
-        Increment = 1,
-
-        CurrentValue = 16,
-
-        Callback = function(Value)
-
-            Config.WalkSpeed = Value
-
-            Plr.Character.Humanoid.WalkSpeed = Value
-
-        end
-
-    })
-
-
-
-    -- Jump Power slider
-
-    UtilityTab:CreateSlider({
-
-        Name = "JumpPower",
-
-        Range = {50, 200},
-
-        Increment = 1,
-
-        CurrentValue = 50,
-
-        Callback = function(Value)
-
-            Config.JumpPower = Value
-
-            Plr.Character.Humanoid.JumpPower = Value
-
-        end
-
-    })
-
-
-
-    -- Hitbox Expander
-
-    UtilityTab:CreateSlider({
-
-        Name = "Hitbox Size",
-
-        Range = {2, 500},
-
-        Increment = 1,
-
-        CurrentValue = 2,
-
-        Callback = function(Value)
-
-            Config.HitboxSize = Value
-
-            for _, v in pairs(Players:GetPlayers()) do
-
-                if v ~= Plr and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-
-                    v.Character.HumanoidRootPart.Size = Vector3.new(Value, Value, Value)
-
-                    v.Character.HumanoidRootPart.Transparency = 0.7
-
-                    v.Character.HumanoidRootPart.Material = Enum.Material.Neon
-
-                end
-
-            end
-
-        end
-
-    })
-
-
-
-    -- Toggle Team Tags for MM2
-
-    VisualTab:CreateToggle({
-
-        Name = "Show Team Tags (MM2)",
-
-        CurrentValue = true,
-
-        Callback = function(Value)
-
-            Config.TeamTagsEnabled = Value
-
-        end
-
-    })
-
-
-
-    -- Lock Part selector
-
-    CombatTab:CreateDropdown({
-
-        Name = "Lock Part (Aimbot)",
-
-        Options = {"Head", "HumanoidRootPart"},
-
-        CurrentOption = "Head",
-
-        Callback = function(Option)
-
-            Config.LockPart = Option
-
-        end
-
-    })
-
+-- ESP
+local function enableESP()
+	while espEnabled do
+		for _,v in ipairs(game.Players:GetPlayers()) do
+			if v ~= Plr and v.Character and v.Character:FindFirstChild("Head") then
+				if not v.Character.Head:FindFirstChild("ESP") then
+					local esp = Instance.new("BillboardGui", v.Character.Head)
+					esp.Name = "ESP"
+					esp.Size = UDim2.new(0, 100, 0, 20)
+					esp.AlwaysOnTop = true
+					esp.StudsOffset = Vector3.new(0, 2, 0)
+					local txt = Instance.new("TextLabel", esp)
+					txt.Text = v.Name
+					txt.Size = UDim2.new(1,0,1,0)
+					txt.BackgroundTransparency = 1
+					txt.TextColor3 = Color3.new(1,0,0)
+					txt.TextScaled = true
+				end
+			end
+		end
+		task.wait(1)
+	end
+	for _,v in ipairs(game.Players:GetPlayers()) do
+		if v.Character and v.Character:FindFirstChild("Head") and v.Character.Head:FindFirstChild("ESP") then
+			v.Character.Head.ESP:Destroy()
+		end
+	end
 end
 
+-- Aimbot
+local function getClosestTarget()
+	local maxDist = 9999
+	local target = nil
+	for _,v in ipairs(game.Players:GetPlayers()) do
+		if v ~= Plr and v.Character and v.Character:FindFirstChild(lockPart) then
+			local pos, onScreen = Camera:WorldToViewportPoint(v.Character[lockPart].Position)
+			local dist = (Vector2.new(pos.X,pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+			if onScreen and dist < maxDist then
+				maxDist = dist
+				target = v
+			end
+		end
+	end
+	return target
+end
 
+RS.RenderStepped:Connect(function()
+	if aimbotEnabled then
+		local target = getClosestTarget()
+		if target and target.Character and target.Character:FindFirstChild(lockPart) then
+			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character[lockPart].Position)
+		end
+	end
+end)
 
--- EXECUTE FLOW
+-- WalkSpeed / Jump
+Plr.CharacterAdded:Connect(function(char)
+	task.wait(1)
+	char:WaitForChild("Humanoid").WalkSpeed = walkSpeed
+	char.Humanoid.JumpPower = jumpPower
+end)
 
-CreateKeyPrompt()
+-- Buttons
+local y = 10
+createButton("WalkSpeed +20", y, function()
+	walkSpeed = math.clamp(walkSpeed + 20, 16, 200)
+	if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+		Plr.Character.Humanoid.WalkSpeed = walkSpeed
+	end
+end)
+y += 35
 
-RunService.RenderStepped:Connect(function()
+createButton("High Jump +10", y, function()
+	jumpPower += 10
+	if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+		Plr.Character.Humanoid.JumpPower = jumpPower
+	end
+end)
+y += 35
 
-    if UISetupDone and not Rayfield.UISetupDone then
+createButton("Toggle Aimbot", y, function()
+	aimbotEnabled = not aimbotEnabled
+end)
+y += 35
 
-        CreateMainUI()
+createButton("Toggle Silent Aim", y, function()
+	silentAimEnabled = not silentAimEnabled
+end)
+y += 35
 
-        Rayfield.UISetupDone = true
+createButton("Toggle ESP", y, function()
+	espEnabled = not espEnabled
+	enableESP()
+end)
+y += 35
 
-    end
+createButton("Lock: Head / Body", y, function()
+	lockPart = (lockPart == "Head" and "HumanoidRootPart" or "Head")
+end)
+y += 35
 
+createButton("Toggle Team Tags", y, function()
+	teamTags = not teamTags
+	if teamTags then
+		applyTeamTags()
+	else
+		for _,p in ipairs(game.Players:GetPlayers()) do
+			if p.Character and p.Character:FindFirstChild("Head") then
+				local t = p.Character.Head:FindFirstChild("COCOTag")
+				if t then t:Destroy() end
+			end
+		end
+	end
 end)
