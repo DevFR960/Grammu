@@ -1,19 +1,24 @@
--- COCO HUB with Key System & Full Features (Rayfield UI)
+-- COCO HUB FULL SCRIPT (NO LOADSTRING) - WITH KEY SYSTEM & FULL FEATURES
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
--- Load Rayfield UI
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- โหลด Rayfield UI (แทนที่ด้วย local file หรือใส่ในโฟลเดอร์ Executor ของคุณได้เลย)
+local success, Rayfield = pcall(function()
+    return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+if not success or not Rayfield then
+    error("Failed to load Rayfield UI. Please check your executor or provide the UI module locally.")
+end
 
 -- Key System Variables
 local keyInput = ""
 local correctKey = "Flower"
 local keyAccepted = false
 
--- Create Key Window
+-- สร้างหน้าต่าง Key System
 local KeyWindow = Rayfield:CreateWindow({
     Name = "🔐 COCO HUB - Key System",
     LoadingTitle = "COCO HUB",
@@ -23,10 +28,8 @@ local KeyWindow = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- Create Authentication Tab for Key Input
 local KeyTab = KeyWindow:CreateTab("Authentication", 4483362458)
 
--- Input Box for Key
 KeyTab:CreateInput({
     Name = "Enter Key",
     PlaceholderText = "Type your key here...",
@@ -36,44 +39,11 @@ KeyTab:CreateInput({
     end,
 })
 
--- Forward declaration of main GUI function
-local function OpenMainGUI() end
-
--- Submit Button
-KeyTab:CreateButton({
-    Name = "✅ Submit Key",
-    Callback = function()
-        if keyInput == correctKey then
-            Rayfield:Notify({
-                Title = "Access Granted",
-                Content = "Welcome to COCO HUB!",
-                Duration = 3,
-            })
-            task.wait(1)
-            local success, err = pcall(function()
-                KeyWindow:Destroy()
-            end)
-            if not success then
-                warn("Failed to destroy KeyWindow:", err)
-            end
-            keyAccepted = true
-            OpenMainGUI()
-        else
-            Rayfield:Notify({
-                Title = "Access Denied",
-                Content = "Invalid key. Try again.",
-                Duration = 3,
-            })
-        end
-    end,
-})
-
--- ฟังก์ชันสร้าง GUI หลัก พร้อมระบบทั้งหมด
-function OpenMainGUI()
-    -- Wait for character
+local function OpenMainGUI()
+    -- รอจนกระทั่งตัวละครโหลดเสร็จ
     repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-    -- Variables
+    -- ตัวแปรสถานะ
     local aimbotEnabled, silentAimbotEnabled, ESPEnabled = false, false, false
     local highJumpEnabled, walkSpeedToggle = false, false
     local TeamTagEnabled = false
@@ -83,7 +53,7 @@ function OpenMainGUI()
     local teamTags = {}
     local espHighlights = {}
 
-    -- Create Main Window
+    -- สร้างหน้าต่างหลัก
     local Window = Rayfield:CreateWindow({
         Name = "🌈 COCO HUB",
         LoadingTitle = "COCO HUB",
@@ -162,12 +132,17 @@ function OpenMainGUI()
         CurrentValue = false,
         Callback = function(state)
             TeamTagEnabled = state
+
+            -- ทำลายทุก Tag เดิมก่อน
             for _, tag in pairs(teamTags) do
-                if tag then tag:Destroy() end
+                if tag and tag.Parent then
+                    tag:Destroy()
+                end
             end
             table.clear(teamTags)
 
             if TeamTagEnabled then
+                -- สร้าง Task แยก เพื่ออัพเดต Team Tags
                 task.spawn(function()
                     while TeamTagEnabled do
                         task.wait(1)
@@ -187,10 +162,13 @@ function OpenMainGUI()
                                     text.BackgroundTransparency = 1
                                     text.Text = player.DisplayName or player.Name
 
+                                    -- อ่านข้อมูลทีมจาก leaderstats.Team หรือ fallback เป็น None
                                     local teamName = "None"
                                     if player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team") then
                                         teamName = player.leaderstats.Team.Value
                                     end
+
+                                    -- กำหนดสีตามทีม MM2
                                     if teamName == "Innocent" then
                                         text.TextColor3 = Color3.fromRGB(0, 255, 0)
                                     elseif teamName == "Sheriff" then
@@ -212,12 +190,27 @@ function OpenMainGUI()
                             end
                         end
                     end
+                    -- เมื่อปิด TeamTagEnabled จะลบ Tag ทั้งหมดที่เหลือ
+                    for _, tag in pairs(teamTags) do
+                        if tag and tag.Parent then
+                            tag:Destroy()
+                        end
+                    end
+                    table.clear(teamTags)
                 end)
+            else
+                -- ถ้าเปิดเป็น false ให้ลบทุก Tag ที่มี
+                for _, tag in pairs(teamTags) do
+                    if tag and tag.Parent then
+                        tag:Destroy()
+                    end
+                end
+                table.clear(teamTags)
             end
         end,
     })
 
-    -- Main RenderStepped Loop
+    -- RenderStepped Loop (อัพเดตทุก Frame)
     RunService.RenderStepped:Connect(function()
         local char = LocalPlayer.Character
         if char then
@@ -341,8 +334,31 @@ function OpenMainGUI()
         return oldNamecall(self, ...)
     end)
 
-    print("[✅ COCO HUB LOADED SUCCESSFULLY] | Key System Enabled | Full Features Ready")
+    print("[✅ COCO HUB LOADED SUCCESSFULLY] | Full Features Ready")
 end
 
--- ระบบจะเริ่มที่หน้าต่างคีย์ เมื่อใส่ถูกต้องจะโหลด GUI หลักอัตโนมัติ
+-- Submit Key Button Callback
+KeyTab:CreateButton({
+    Name = "✅ Submit Key",
+    Callback = function()
+        if keyInput == correctKey then
+            Rayfield:Notify({
+                Title = "Access Granted",
+                Content = "Welcome to COCO HUB!",
+                Duration = 3,
+            })
+            task.wait(1)
+            KeyWindow:Destroy()
+            keyAccepted = true
+            OpenMainGUI()
+        else
+            Rayfield:Notify({
+                Title = "Access Denied",
+                Content = "Invalid key. Try again.",
+                Duration = 3,
+            })
+        end
+    end,
+})
 
+print("[🔐 COCO HUB Key System Ready] | Please enter the key to continue.")
