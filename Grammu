@@ -12,53 +12,49 @@ local Players = game:GetService("Players")
 local Plr = Players.LocalPlayer
 
 
-
 local function promptKey()
 
-	local screen = Instance.new("ScreenGui", CoreGui)
+ local screen = Instance.new("ScreenGui", CoreGui)
 
-	screen.Name = "KeySystem"
+ screen.Name = "KeySystem"
 
-	local box = Instance.new("TextBox", screen)
+ local box = Instance.new("TextBox", screen)
 
-	box.Size = UDim2.new(0, 200, 0, 50)
+ box.Size = UDim2.new(0, 200, 0, 50)
 
-	box.Position = UDim2.new(0.5, -100, 0.5, -25)
+ box.Position = UDim2.new(0.5, -100, 0.5, -25)
 
-	box.PlaceholderText = "Enter Key"
+ box.PlaceholderText = "Enter Key"
 
-	box.TextScaled = true
+ box.TextScaled = true
 
 
+ local confirmed = false
 
-	local confirmed = false
+ box.FocusLost:Connect(function(enter)
 
-	box.FocusLost:Connect(function(enter)
+  if enter and box.Text == correctKey then
 
-		if enter and box.Text == correctKey then
+   screen:Destroy()
 
-			screen:Destroy()
+   confirmed = true
 
-			confirmed = true
+  else
 
-		else
+   box.Text = ""
 
-			box.Text = ""
+   box.PlaceholderText = "Incorrect! Try again."
 
-			box.PlaceholderText = "Incorrect! Try again."
+  end
 
-		end
+ end)
 
-	end)
-
-	repeat task.wait() until confirmed
+ repeat task.wait() until confirmed
 
 end
 
 
-
 promptKey()
-
 
 
 --==[🎮 Load Rayfield UI]===--
@@ -67,18 +63,17 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
 
-	Name = "COCO HUB - MM2",
+ Name = "COCO HUB - MM2",
 
-	LoadingTitle = "COCO HUB",
+ LoadingTitle = "COCO HUB",
 
-	LoadingSubtitle = "by DevFR960",
+ LoadingSubtitle = "by DevFR960",
 
-	ConfigurationSaving = {Enabled = false},
+ ConfigurationSaving = {Enabled = false},
 
-	KeySystem = false,
+ KeySystem = false,
 
 })
-
 
 
 --==[🎯 Aimbot & Silent Aimbot]===--
@@ -88,39 +83,37 @@ local Camera = workspace.CurrentCamera
 local LockPart = "Head" -- or "HumanoidRootPart"
 
 
-
 local function getClosestTarget()
 
-	local closest, dist = nil, math.huge
+ local closest, dist = nil, math.huge
 
-	for _, v in pairs(Players:GetPlayers()) do
+ for _, v in pairs(Players:GetPlayers()) do
 
-		if v ~= Plr and v.Character and v.Character:FindFirstChild(LockPart) then
+  if v ~= Plr and v.Character and v.Character:FindFirstChild(LockPart) then
 
-			local screenPos, onScreen = Camera:WorldToViewportPoint(v.Character[LockPart].Position)
+   local screenPos, onScreen = Camera:WorldToViewportPoint(v.Character[LockPart].Position)
 
-			if onScreen then
+   if onScreen then
 
-				local mag = (Vector2.new(screenPos.X, screenPos.Y) - UserInputService:GetMouseLocation()).Magnitude
+    local mag = (Vector2.new(screenPos.X, screenPos.Y) - UserInputService:GetMouseLocation()).Magnitude
 
-				if mag < dist then
+    if mag < dist then
 
-					closest = v
+     closest = v
 
-					dist = mag
+     dist = mag
 
-				end
+    end
 
-			end
+   end
 
-		end
+  end
 
-	end
+ end
 
-	return closest
+ return closest
 
 end
-
 
 
 -- Bullet Redirect
@@ -129,30 +122,29 @@ local __namecall
 
 __namecall = hookmetamethod(game, "__namecall", function(self, ...)
 
-	local args = {...}
+ local args = {...}
 
-	local method = getnamecallmethod()
+ local method = getnamecallmethod()
 
-	if tostring(self) == "HitPart" and method == "FireServer" then
+ if tostring(self) == "HitPart" and method == "FireServer" then
 
-		local target = getClosestTarget()
+  local target = getClosestTarget()
 
-		if target and target.Character and target.Character:FindFirstChild(LockPart) then
+  if target and target.Character and target.Character:FindFirstChild(LockPart) then
 
-			args[1] = target.Character[LockPart]
+   args[1] = target.Character[LockPart]
 
-			args[2] = target.Character[LockPart].Position
+   args[2] = target.Character[LockPart].Position
 
-			return __namecall(self, unpack(args))
+   return __namecall(self, unpack(args))
 
-		end
+  end
 
-	end
+ end
 
-	return __namecall(self, ...)
+ return __namecall(self, ...)
 
 end)
-
 
 
 --==[🚶 WalkSpeed & Jump]===--
@@ -162,61 +154,58 @@ local Speed = 16
 local Jump = 50
 
 
-
 Rayfield:CreateSlider({
 
-	Name = "WalkSpeed",
+ Name = "WalkSpeed",
 
-	SectionParent = Window,
+ SectionParent = Window,
 
-	Range = {16, 200},
+ Range = {16, 200},
 
-	Increment = 1,
+ Increment = 1,
 
-	CurrentValue = Speed,
+ CurrentValue = Speed,
 
-	Callback = function(v)
+ Callback = function(v)
 
-		Speed = v
+  Speed = v
 
-		if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+  if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
 
-			Plr.Character.Humanoid.WalkSpeed = v
+   Plr.Character.Humanoid.WalkSpeed = v
 
-		end
+  end
 
-	end,
+ end,
 
 })
 
 
-
 Rayfield:CreateSlider({
 
-	Name = "JumpPower",
+ Name = "JumpPower",
 
-	SectionParent = Window,
+ SectionParent = Window,
 
-	Range = {50, 200},
+ Range = {50, 200},
 
-	Increment = 1,
+ Increment = 1,
 
-	CurrentValue = Jump,
+ CurrentValue = Jump,
 
-	Callback = function(v)
+ Callback = function(v)
 
-		Jump = v
+  Jump = v
 
-		if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
+  if Plr.Character and Plr.Character:FindFirstChild("Humanoid") then
 
-			Plr.Character.Humanoid.JumpPower = v
+   Plr.Character.Humanoid.JumpPower = v
 
-		end
+  end
 
-	end,
+ end,
 
 })
-
 
 
 --==[👀 ESP for Silent Aim Target]===--
@@ -227,96 +216,93 @@ RunService = game:GetService("RunService")
 
 RunService.RenderStepped:Connect(function()
 
-	local target = getClosestTarget()
+ local target = getClosestTarget()
 
-	if target and target.Character then
+ if target and target.Character then
 
-		if not espHighlight then
+  if not espHighlight then
 
-			espHighlight = Instance.new("Highlight", target.Character)
+   espHighlight = Instance.new("Highlight", target.Character)
 
-			espHighlight.FillColor = Color3.fromRGB(255, 50, 50)
+   espHighlight.FillColor = Color3.fromRGB(255, 50, 50)
 
-			espHighlight.FillTransparency = 0.5
+   espHighlight.FillTransparency = 0.5
 
-			espHighlight.OutlineTransparency = 1
+   espHighlight.OutlineTransparency = 1
 
-		end
+  end
 
-		espHighlight.Adornee = target.Character
+  espHighlight.Adornee = target.Character
 
-	else
+ else
 
-		if espHighlight then
+  if espHighlight then
 
-			espHighlight:Destroy()
+   espHighlight:Destroy()
 
-			espHighlight = nil
+   espHighlight = nil
 
-		end
+  end
 
-	end
+ end
 
 end)
-
 
 
 --==[🧑‍🤝‍🧑 MM2 Team Tags (Color-coded)]===--
 
 for _, v in pairs(Players:GetPlayers()) do
 
-	if v:FindFirstChild("leaderstats") and not v.Character:FindFirstChild("BillboardGui") then
+ if v:FindFirstChild("leaderstats") and not v.Character:FindFirstChild("BillboardGui") then
 
-		local tag = Instance.new("BillboardGui", v.Character:WaitForChild("Head"))
+  local tag = Instance.new("BillboardGui", v.Character:WaitForChild("Head"))
 
-		tag.Size = UDim2.new(0, 100, 0, 40)
+  tag.Size = UDim2.new(0, 100, 0, 40)
 
-		tag.StudsOffset = Vector3.new(0, 2, 0)
+  tag.StudsOffset = Vector3.new(0, 2, 0)
 
-		tag.AlwaysOnTop = true
-
-
-
-		local txt = Instance.new("TextLabel", tag)
-
-		txt.Size = UDim2.new(1, 0, 1, 0)
-
-		txt.BackgroundTransparency = 1
-
-		txt.TextScaled = true
-
-		txt.Font = Enum.Font.GothamBold
-
-		txt.TextColor3 = Color3.new(1, 1, 1)
+  tag.AlwaysOnTop = true
 
 
+  local txt = Instance.new("TextLabel", tag)
 
-		local role = v.leaderstats:FindFirstChild("Team")
+  txt.Size = UDim2.new(1, 0, 1, 0)
 
-		if role then
+  txt.BackgroundTransparency = 1
 
-			if role.Value == "Sheriff" then
+  txt.TextScaled = true
 
-				txt.Text = "Sheriff"
+  txt.Font = Enum.Font.GothamBold
 
-				txt.TextColor3 = Color3.fromRGB(0, 255, 255)
+  txt.TextColor3 = Color3.new(1, 1, 1)
 
-			elseif role.Value == "Murderer" then
 
-				txt.Text = "Murderer"
+  local role = v.leaderstats:FindFirstChild("Team")
 
-				txt.TextColor3 = Color3.fromRGB(255, 0, 0)
+  if role then
 
-			elseif role.Value == "Innocent" then
+   if role.Value == "Sheriff" then
 
-				txt.Text = "Innocent"
+    txt.Text = "Sheriff"
 
-				txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+    txt.TextColor3 = Color3.fromRGB(0, 255, 255)
 
-			end
+   elseif role.Value == "Murderer" then
 
-		end
+    txt.Text = "Murderer"
 
-	end
+    txt.TextColor3 = Color3.fromRGB(255, 0, 0)
+
+   elseif role.Value == "Innocent" then
+
+    txt.Text = "Innocent"
+
+    txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+   end
+
+  end
+
+ end
 
 end
