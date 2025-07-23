@@ -11,7 +11,9 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 -- Key System Variables
 local keyInput = ""
 local correctKey = "Flower"
+local keyAccepted = false
 
+-- Create Key Window
 local KeyWindow = Rayfield:CreateWindow({
     Name = "🔐 COCO HUB - Key System",
     LoadingTitle = "COCO HUB",
@@ -21,14 +23,11 @@ local KeyWindow = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
-Rayfield:Notify({
-    Title = "Welcome to COCO HUB",
-    Content = "Please enter your access key",
-    Duration = 5,
-})
+-- Create Authentication Tab for Key Input
+local KeyTab = KeyWindow:CreateTab("Authentication", 4483362458)
 
--- Input for Key
-KeyWindow:CreateInput({
+-- Input Box for Key
+KeyTab:CreateInput({
     Name = "Enter Key",
     PlaceholderText = "Type your key here...",
     RemoveTextAfterFocusLost = false,
@@ -37,14 +36,11 @@ KeyWindow:CreateInput({
     end,
 })
 
-local keyAccepted = false
-
 -- Submit Button
-KeyWindow:CreateButton({
+KeyTab:CreateButton({
     Name = "✅ Submit Key",
     Callback = function()
         if keyInput == correctKey then
-            keyAccepted = true
             Rayfield:Notify({
                 Title = "Access Granted",
                 Content = "Welcome to COCO HUB!",
@@ -52,6 +48,7 @@ KeyWindow:CreateButton({
             })
             task.wait(1)
             KeyWindow:Destroy()
+            keyAccepted = true
         else
             Rayfield:Notify({
                 Title = "Access Denied",
@@ -65,7 +62,7 @@ KeyWindow:CreateButton({
 -- Wait until key is accepted
 repeat task.wait() until keyAccepted
 
--- Wait for character
+-- Wait for player character
 repeat task.wait() until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
 -- Variables
@@ -211,14 +208,6 @@ Tab:CreateToggle({
         end
     end,
 })
-
--- Auto Refresh Player List every 10 seconds (optional, just example)
-task.spawn(function()
-    while true do
-        task.wait(10)
-        -- Could add code to refresh UI dropdowns if you add player lists
-    end
-end)
 
 -- Main RenderStepped Loop
 RunService.RenderStepped:Connect(function()
