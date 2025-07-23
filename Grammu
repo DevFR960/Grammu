@@ -1,220 +1,265 @@
---// COCO HUB – MM2  (FINAL)  //--
---  Features: KeySys ▪ Rayfield UI ▪ WalkSpeed ▪ HighJump ▪ Rainbow‑FOV Aimbot ▪ Silent‑Aimbot
---            ESP ▪ TeamTags by Character.Role ▪ Toggle GUI  ▪ Mobile‑Delta Friendly
+-- COCO HUB - FULL DELTA COMPATIBLE VERSION
+-- YOU NEED TO INSERT YOUR OWN Rayfield LOADER
+-- example: local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
--------------------------------------------------
--- 🔑 KEY SYSTEM (simple textbox – key = Flower)
--------------------------------------------------
-local Players, UIS = game:GetService("Players"), game:GetService("UserInputService")
-local LP, CoreGui = Players.LocalPlayer, game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
 
-local function keyPrompt()
-    local gui = Instance.new("ScreenGui", CoreGui)
-    gui.Name = "COCO_Key"
-    local box = Instance.new("TextBox", gui)
-    box.Size, box.Position = UDim2.new(0,200,0,50), UDim2.new(.5,-100,.5,-25)
-    box.PlaceholderText, box.TextScaled = "Enter Key", true
-    local ok=false
-    box.FocusLost:Connect(function(enter)
-        if enter and box.Text=="Flower" then ok=true gui:Destroy() else box.Text="" end
-    end)
-    repeat task.wait() until ok
-end
-keyPrompt()
+-- Variables
+local FOVCircle
+local AimbotEnabled = false
+local SilentAimEnabled = false
+local AimbotTargetPart = "Head"
+local FlyEnabled = false
+local FlySpeed = 5
+local ESPEnabled = false
+local HitboxExpandEnabled = false
+local InvisibleEnabled = false
+local WalkSpeedValue = 16
+local JumpPowerValue = 50
 
--------------------------------------------------
--- 🎮 LOAD RAYFIELD UI (you may wrap with loadstring)
--------------------------------------------------
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- GUI LOADER (Rayfield)
+local Rayfield = Rayfield -- You insert loadstring loader yourself!
 
+-- UI SETUP
 local Window = Rayfield:CreateWindow({
-    Name="🌈 COCO HUB - MM2", LoadingTitle="COCO HUB", LoadingSubtitle="By DevFR",
-    ConfigurationSaving={Enabled=false}, KeySystem=false
+   Name = "COCO HUB - MM2 | Delta Compatible",
+   LoadingTitle = "COCO HUB",
+   LoadingSubtitle = "by Dechatorn",
+   ConfigurationSaving = {
+      Enabled = false
+   },
+   Discord = {Enabled = false},
+   KeySystem = false
 })
 
--------------------------------------------------
--- 🔧 GLOBAL VARS
--------------------------------------------------
-local RunService, Camera = game:GetService("RunService"), workspace.CurrentCamera
-local vars = {
-    WalkSpeed=16, JumpPower=50,
-    Aimbot=false, Silent=false, ESP=false, Tags=false,
-    FOV=120, SilentFOV=120, LockPart="Head",
-    espHl={}, tagGui={}, fovObj=nil, sfovObj=nil, silentTarget=nil
-}
+-- PAGE
+local Main = Window:CreateTab("Main")
+local Combat = Window:CreateTab("Combat")
+local Visual = Window:CreateTab("Visual")
+local Movement = Window:CreateTab("Movement")
+local Utility = Window:CreateTab("Utility")
 
--------------------------------------------------
--- 🖼️ DRAWING HELPERS (Rainbow FOV)
--------------------------------------------------
-local function makeCircle(radius)
-    local c = Drawing.new("Circle")
-    c.Radius, c.NumSides, c.Thickness, c.Filled, c.Transparency = radius, 60, 2, false, .6
-    c.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    return c
+-- FOV CIRCLE
+function DrawFOV()
+   if FOVCircle then FOVCircle:Remove() end
+   local circle = Drawing.new("Circle")
+   circle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+   circle.Radius = 100
+   circle.Thickness = 2
+   circle.Filled = false
+   circle.Transparency = 1
+   circle.Visible = true
+
+   task.spawn(function()
+      while AimbotEnabled or SilentAimEnabled do
+         circle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+         circle.Color = Color3.fromHSV(tick()%5/5, 1, 1)
+         task.wait()
+      end
+      circle:Remove()
+   end)
+
+   FOVCircle = circle
 end
 
-local function updateRainbow(circle)
-    circle.Color = Color3.fromHSV((tick()%5)/5,1,1)
-    circle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-end
-
--------------------------------------------------
--- 🔍 TARGET FUNCTIONS
--------------------------------------------------
-local function closestInFOV(maxFOV)
-    local closest, dist = nil, math.huge
-    for _,pl in pairs(Players:GetPlayers()) do
-        if pl~=LP and pl.Character and pl.Character:FindFirstChild(vars.LockPart) then
-            local pos,onScr = Camera:WorldToViewportPoint(pl.Character[vars.LockPart].Position)
-            if onScr then
-                local d = (Vector2.new(pos.X,pos.Y)-UIS:GetMouseLocation()).Magnitude
-                if d<maxFOV and d<dist then closest,dist=pl,d end
+-- TARGET FINDER
+function GetClosestTarget()
+   local closest = nil
+   local shortest = math.huge
+   for _, plr in ipairs(Players:GetPlayers()) do
+      if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+         local screenPos, onScreen = Camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
+         if onScreen then
+            local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+            if distance < shortest and distance <= 100 then
+               closest = plr
+               shortest = distance
             end
-        end
-    end
-    return closest
+         end
+      end
+   end
+   return closest
 end
 
--------------------------------------------------
--- 🌈 UI ELEMENTS
--------------------------------------------------
-local Main = Window:CreateTab("Main",4483362458)
-
-Main:CreateToggle({
-    Name="Aimbot", CurrentValue=false, Callback=function(v) vars.Aimbot=v end
-})
-Main:CreateToggle({
-    Name="Silent Aimbot", CurrentValue=false, Callback=function(v) vars.Silent=v end
-})
-Main:CreateSlider({
-    Name="FOV Radius",Range={50,500},Increment=10,CurrentValue=vars.FOV,
-    Callback=function(val) vars.FOV=val if vars.fovObj then vars.fovObj.Radius=val end end
-})
-Main:CreateSlider({
-    Name="Silent FOV",Range={50,500},Increment=10,CurrentValue=vars.SilentFOV,
-    Callback=function(val) vars.SilentFOV=val if vars.sfovObj then vars.sfovObj.Radius=val end end
-})
-Main:CreateDropdown({
-    Name="Lock Part",Options={"Head","HumanoidRootPart"},CurrentOption="Head",
-    Callback=function(op) vars.LockPart=op end
-})
-
-local Move = Window:CreateTab("Movement",4483362458)
-Move:CreateSlider({
-    Name="WalkSpeed",Range={16,200},Increment=1,CurrentValue=16,
-    Callback=function(v) vars.WalkSpeed=v end
-})
-Move:CreateToggle({
-    Name="Enable WalkSpeed",CurrentValue=false,
-    Callback=function(s) vars.WalkSpeedOn=s end
-})
-Move:CreateSlider({
-    Name="JumpPower",Range={50,200},Increment=1,CurrentValue=50,
-    Callback=function(v) vars.JumpPower=v end
-})
-Move:CreateToggle({
-    Name="Enable HighJump",CurrentValue=false,
-    Callback=function(s) vars.JumpOn=s end
-})
-
-local Visual = Window:CreateTab("Visual",4483362458)
-Visual:CreateToggle({
-    Name="ESP Players",CurrentValue=false,Callback=function(v) vars.ESP=v end
-})
-Visual:CreateToggle({
-    Name="Team Tags (MM2)",CurrentValue=false,Callback=function(v) vars.Tags=v end
-})
-
--------------------------------------------------
--- 🖥️ RENDER STEP LOOP
--------------------------------------------------
+-- AIMBOT
 RunService.RenderStepped:Connect(function()
-    -- Movement
-    if LP.Character and LP.Character:FindFirstChild("Humanoid") then
-        local hum=LP.Character.Humanoid
-        hum.WalkSpeed = vars.WalkSpeedOn and vars.WalkSpeed or 16
-        hum.JumpPower = vars.JumpOn and vars.JumpPower or 50
-    end
-
-    -- Rainbow FOV circles
-    if vars.Aimbot then
-        if not vars.fovObj then vars.fovObj=makeCircle(vars.FOV) end
-        updateRainbow(vars.fovObj)
-    elseif vars.fovObj then vars.fovObj:Remove() vars.fovObj=nil end
-
-    if vars.Silent then
-        if not vars.sfovObj then vars.sfovObj=makeCircle(vars.SilentFOV) end
-        updateRainbow(vars.sfovObj)
-    elseif vars.sfovObj then vars.sfovObj:Remove() vars.sfovObj=nil end
-
-    -- Aimbot camera
-    if vars.Aimbot then
-        local tgt = closestInFOV(vars.FOV)
-        if tgt and tgt.Character and tgt.Character:FindFirstChild(vars.LockPart) then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, tgt.Character[vars.LockPart].Position)
-        end
-    end
-
-    -- ESP
-    for pl,h in pairs(vars.espHl) do
-        if not vars.ESP or not pl.Character or not pl.Character:FindFirstChild("HumanoidRootPart") then
-            h:Destroy(); vars.espHl[pl]=nil
-        end
-    end
-    if vars.ESP then
-        for _,pl in pairs(Players:GetPlayers()) do
-            if pl~=LP and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
-                if not vars.espHl[pl] then
-                    local hl=Instance.new("Highlight",pl.Character)
-                    hl.FillColor=Color3.fromRGB(0,255,0); hl.FillTransparency=.6
-                    vars.espHl[pl]=hl
-                end
-            end
-        end
-    end
-
-    -- Team Tags
-    if vars.Tags then
-        for _,pl in pairs(Players:GetPlayers()) do
-            if pl~=LP and pl.Character and pl.Character:FindFirstChild("Head") and not vars.tagGui[pl] then
-                local roleVal = pl.Character:FindFirstChild("Role") or pl:FindFirstChild("Role") or pl:FindFirstChild("MM2Role")
-                local role = roleVal and roleVal.Value or "Unknown"
-                local tag=Instance.new("BillboardGui",pl.Character.Head)
-                tag.Name="COCO_Tag"; tag.Size=UDim2.new(0,80,0,20)
-                tag.StudsOffset=Vector3.new(0,2.5,0); tag.AlwaysOnTop=true
-                local lbl=Instance.new("TextLabel",tag)
-                lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1
-                lbl.Font=Enum.Font.GothamBold; lbl.TextScaled=true; lbl.Text=role
-                if role=="Murderer" then lbl.TextColor3=Color3.fromRGB(255,0,0)
-                elseif role=="Sheriff" then lbl.TextColor3=Color3.fromRGB(0,0,255)
-                elseif role=="Innocent" then lbl.TextColor3=Color3.fromRGB(0,255,0)
-                else lbl.TextColor3=Color3.fromRGB(255,255,255) end
-                vars.tagGui[pl]=tag
-            end
-        end
-    else
-        for pl,g in pairs(vars.tagGui) do if g then g:Destroy() end vars.tagGui={} end
-    end
+   if AimbotEnabled then
+      local target = GetClosestTarget()
+      if target and target.Character and target.Character:FindFirstChild(AimbotTargetPart) then
+         Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character[AimbotTargetPart].Position)
+      end
+   end
 end)
 
--------------------------------------------------
--- 🔫 SILENT AIM BULLET REDIRECT
--------------------------------------------------
-local mt=getrawmetatable(game); setreadonly(mt,false)
-local old=mt.__namecall
-mt.__namecall=newcclosure(function(self,...)
-    local args={...}; local m=getnamecallmethod()
-    if m=="FireServer" and tostring(self)=="Shoot" and vars.Silent then
-        vars.silentTarget=closestInFOV(vars.SilentFOV)
-        if vars.silentTarget and vars.silentTarget.Character and vars.silentTarget.Character:FindFirstChild(vars.LockPart) then
-            if typeof(args[1])=="Vector3" then
-                args[1]=vars.silentTarget.Character[vars.LockPart].Position + Vector3.new(0,1.5,0)
-                return old(self,unpack(args))
-            end
-        end
-    end
-    return old(self,...)
+-- SILENT AIM
+local __namecall
+__namecall = hookmetamethod(game, "__namecall", function(...)
+   local method = getnamecallmethod()
+   local args = {...}
+   if SilentAimEnabled and tostring(method) == "FireServer" and tostring(args[1]) == "Hit" then
+      local target = GetClosestTarget()
+      if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+         args[2] = target.Character.HumanoidRootPart.Position
+         return __namecall(unpack(args))
+      end
+   end
+   return __namecall(...)
 end)
-setreadonly(mt,true)
 
-print("✅ COCO HUB MM2 loaded – Enjoy!")
+-- ESP
+function EnableESP()
+   for _, plr in ipairs(Players:GetPlayers()) do
+      if plr ~= LocalPlayer then
+         local box = Instance.new("BillboardGui", plr.Character)
+         box.Name = "ESPBox"
+         box.Size = UDim2.new(0, 100, 0, 20)
+         box.AlwaysOnTop = true
+         local label = Instance.new("TextLabel", box)
+         label.Size = UDim2.new(1, 0, 1, 0)
+         label.Text = plr.Name
+         label.BackgroundTransparency = 1
+         label.TextColor3 = Color3.new(1, 0, 0)
+      end
+   end
+end
+
+function DisableESP()
+   for _, plr in ipairs(Players:GetPlayers()) do
+      local esp = plr.Character and plr.Character:FindFirstChild("ESPBox")
+      if esp then esp:Destroy() end
+   end
+end
+
+-- FLY SYSTEM
+local flyVel, flyGyro
+function ToggleFly(state)
+   if state then
+      flyVel = Instance.new("BodyVelocity")
+      flyVel.Velocity = Vector3.zero
+      flyVel.MaxForce = Vector3.new(1, 1, 1) * 100000
+      flyVel.Parent = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+
+      flyGyro = Instance.new("BodyGyro")
+      flyGyro.CFrame = Camera.CFrame
+      flyGyro.MaxTorque = Vector3.new(1, 1, 1) * 100000
+      flyGyro.Parent = LocalPlayer.Character.HumanoidRootPart
+
+      RunService.Stepped:Connect(function()
+         if FlyEnabled then
+            flyVel.Velocity = Camera.CFrame.LookVector * FlySpeed
+            flyGyro.CFrame = Camera.CFrame
+         end
+      end)
+   else
+      if flyVel then flyVel:Destroy() end
+      if flyGyro then flyGyro:Destroy() end
+   end
+end
+
+-- TEAM TAGS
+function ShowRoleTags()
+   for _, plr in ipairs(Players:GetPlayers()) do
+      if plr:FindFirstChild("leaderstats") and plr.leaderstats:FindFirstChild("Team") then
+         local role = plr.leaderstats.Team.Value
+         local tag = Instance.new("BillboardGui", plr.Character)
+         tag.Name = "RoleTag"
+         tag.Size = UDim2.new(0, 100, 0, 20)
+         tag.AlwaysOnTop = true
+         local label = Instance.new("TextLabel", tag)
+         label.Size = UDim2.new(1, 0, 1, 0)
+         label.Text = role
+         label.TextColor3 = role == "Murderer" and Color3.new(1, 0, 0)
+                      or role == "Sheriff" and Color3.new(0, 0, 1)
+                      or Color3.new(0, 1, 0)
+         label.BackgroundTransparency = 1
+      end
+   end
+end
+
+-- TOGGLES
+Combat:CreateToggle({
+   Name = "Aimbot",
+   CurrentValue = false,
+   Callback = function(v)
+      AimbotEnabled = v
+      if v then DrawFOV() end
+   end
+})
+
+Combat:CreateToggle({
+   Name = "Silent Aimbot",
+   CurrentValue = false,
+   Callback = function(v)
+      SilentAimEnabled = v
+      if v then DrawFOV() end
+   end
+})
+
+Visual:CreateToggle({
+   Name = "ESP",
+   CurrentValue = false,
+   Callback = function(v)
+      ESPEnabled = v
+      if v then EnableESP() else DisableESP() end
+   end
+})
+
+Utility:CreateToggle({
+   Name = "Team Tags (MM2)",
+   CurrentValue = false,
+   Callback = function(v)
+      if v then ShowRoleTags() end
+   end
+})
+
+Movement:CreateSlider({
+   Name = "WalkSpeed",
+   Range = {16, 200},
+   Increment = 1,
+   CurrentValue = 16,
+   Callback = function(val)
+      WalkSpeedValue = val
+      LocalPlayer.Character.Humanoid.WalkSpeed = val
+   end
+})
+
+Movement:CreateSlider({
+   Name = "High Jump",
+   Range = {50, 300},
+   Increment = 1,
+   CurrentValue = 50,
+   Callback = function(val)
+      JumpPowerValue = val
+      LocalPlayer.Character.Humanoid.JumpPower = val
+   end
+})
+
+Movement:CreateToggle({
+   Name = "Fly Mode",
+   CurrentValue = false,
+   Callback = function(v)
+      FlyEnabled = v
+      ToggleFly(v)
+   end
+})
+
+Movement:CreateSlider({
+   Name = "Fly Speed",
+   Range = {1, 100},
+   Increment = 1,
+   CurrentValue = 5,
+   Callback = function(val)
+      FlySpeed = val
+   end
+})
+
+-- Toggle GUI
+UIS.InputBegan:Connect(function(input)
+   if input.KeyCode == Enum.KeyCode.RightControl then
+      Rayfield:Toggle()
+   end
+end)
