@@ -1,274 +1,190 @@
---// COCO HUB - FULL VERSION (NO CALLBACK ERRORS, NO CUT, NO TEAMCHECK, RAYFIELD UI)  
---// Supports: Aimbot, Silent Aim, ESP, Teleport, Fly, Hitbox Expander, GUI Toggle, etc.
-
--- Load Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Players, RunService, UserInputService = game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService")
+local Camera, Plr = workspace.CurrentCamera, Players.LocalPlayer
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
+repeat task.wait() until Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart")
 
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+-- SETTINGS
+local settings = {
+    Aimbot = false,
+    AimbotPart = "Head",
+    SilentAim = false,
+    SilentPart = "Head",
+    ShowFOV = true,
+    FOVSize = 100,
+    FlySpeed = 2,
+    WalkSpeed = 16,
+    JumpPower = 50,
+    HitboxSize = 2,
+    FlyToggle = false,
+    Invisible = false,
+}
 
--- Variables
-local AimbotSettings = {Enabled = false, Part = "Head"}
-local SilentAimSettings = {Enabled = false, Part = "Head"}
-local FlySettings = {Enabled = false, Speed = 100}
-local HitboxSettings = {Enabled = false, Size = 5}
-local ESPEnabled = false
-local FlyVelocity = Vector3.zero
-local InvisState = false
+-- UI
+local Window = Rayfield:CreateWindow({Name = "🌈 COCO HUB - MM2", LoadingTitle = "COCO HUB", ConfigurationSaving = {Enabled = true, FolderName = "COCO_HUB"}})
 
--- Create UI Window
-local Window = Rayfield:CreateWindow({
-   Name = "COCO HUB [MM2]",
-   LoadingTitle = "Loading COCO HUB...",
-   ConfigurationSaving = {Enabled = false},
-})
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Radius = settings.FOVSize
+FOVCircle.Thickness = 1
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
+FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
--- Main Tab
-local MainTab = Window:CreateTab("Main", 4483362458)
-
--- WalkSpeed
-MainTab:CreateSlider({
-   Name = "WalkSpeed",
-   Range = {16, 200},
-   Increment = 1,
-   CurrentValue = 16,
-   Callback = function(Value)
-      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-         LocalPlayer.Character.Humanoid.WalkSpeed = Value
-      end
-   end,
-})
-
--- High Jump
-MainTab:CreateSlider({
-   Name = "High Jump",
-   Range = {50, 500},
-   Increment = 5,
-   CurrentValue = 50,
-   Callback = function(Value)
-      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-         LocalPlayer.Character.Humanoid.JumpPower = Value
-      end
-   end,
-})
-
--- Fly
-MainTab:CreateToggle({
-   Name = "Fly",
-   CurrentValue = false,
-   Callback = function(State)
-      FlySettings.Enabled = State
-      if not State and LocalPlayer.Character then
-         LocalPlayer.Character:FindFirstChildOfClass("Humanoid").PlatformStand = false
-      end
-   end,
-})
-MainTab:CreateSlider({
-   Name = "Fly Speed",
-   Range = {50, 300},
-   Increment = 5,
-   CurrentValue = 100,
-   Callback = function(Value)
-      FlySettings.Speed = Value
-   end,
-})
-
--- ESP
-MainTab:CreateToggle({
-   Name = "ESP",
-   CurrentValue = false,
-   Callback = function(State)
-      ESPEnabled = State
-   end,
-})
-
--- Aimbot
-MainTab:CreateToggle({
-   Name = "Aimbot",
-   CurrentValue = false,
-   Callback = function(State)
-      AimbotSettings.Enabled = State
-   end,
-})
-MainTab:CreateDropdown({
-   Name = "Aimbot Lock Part",
-   Options = {"Head", "HumanoidRootPart"},
-   CurrentOption = "Head",
-   Callback = function(Option)
-      AimbotSettings.Part = Option
-   end,
-})
-
--- Silent Aimbot
-MainTab:CreateToggle({
-   Name = "Silent Aim",
-   CurrentValue = false,
-   Callback = function(State)
-      SilentAimSettings.Enabled = State
-   end,
-})
-MainTab:CreateDropdown({
-   Name = "Silent Aim Lock Part",
-   Options = {"Head", "HumanoidRootPart"},
-   CurrentOption = "Head",
-   Callback = function(Option)
-      SilentAimSettings.Part = Option
-   end,
-})
-
--- Hitbox Expander
-MainTab:CreateToggle({
-   Name = "Hitbox Expander (Players)",
-   CurrentValue = false,
-   Callback = function(State)
-      HitboxSettings.Enabled = State
-   end,
-})
-MainTab:CreateSlider({
-   Name = "Hitbox Size",
-   Range = {5, 500},
-   Increment = 5,
-   CurrentValue = 5,
-   Callback = function(Value)
-      HitboxSettings.Size = Value
-   end,
-})
-
--- Invisible
-MainTab:CreateButton({
-   Name = "Become Invisible",
-   Callback = function()
-      local char = LocalPlayer.Character
-      if char and char:FindFirstChild("HumanoidRootPart") then
-         char.HumanoidRootPart.Transparency = 1
-         for _,v in ipairs(char:GetDescendants()) do
-            if v:IsA("BasePart") then
-               v.Transparency = 1
-               v.CanCollide = false
-            end
-         end
-         InvisState = true
-      end
-   end,
-})
-MainTab:CreateButton({
-   Name = "Become Visible",
-   Callback = function()
-      local char = LocalPlayer.Character
-      if char then
-         for _,v in ipairs(char:GetDescendants()) do
-            if v:IsA("BasePart") then
-               v.Transparency = 0
-               v.CanCollide = true
-            end
-         end
-         InvisState = false
-      end
-   end,
-})
-
--- Teleport
-local PlayerList = {}
-MainTab:CreateButton({
-   Name = "Refresh Player List",
-   Callback = function()
-      PlayerList = {}
-      for _,v in ipairs(Players:GetPlayers()) do
-         if v ~= LocalPlayer then
-            table.insert(PlayerList, v.Name)
-         end
-      end
-   end,
-})
-MainTab:CreateDropdown({
-   Name = "Teleport to Player",
-   Options = PlayerList,
-   CurrentOption = nil,
-   Callback = function(PlayerName)
-      local target = Players:FindFirstChild(PlayerName)
-      if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-         LocalPlayer.Character:PivotTo(target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0))
-      end
-   end,
-})
-
--- GUI Toggle
-UserInputService.InputBegan:Connect(function(input, gpe)
-   if not gpe and input.KeyCode == Enum.KeyCode.RightControl then
-      Rayfield:Toggle()
-   end
+RunService.RenderStepped:Connect(function()
+    if settings.ShowFOV then
+        FOVCircle.Visible = true
+        FOVCircle.Radius = settings.FOVSize
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local r = math.sin(tick()) * 127 + 128
+        local g = math.sin(tick() + 2) * 127 + 128
+        local b = math.sin(tick() + 4) * 127 + 128
+        FOVCircle.Color = Color3.fromRGB(r, g, b)
+    else
+        FOVCircle.Visible = false
+    end
 end)
 
--- Aimbot Logic
-RunService.RenderStepped:Connect(function()
-   if FlySettings.Enabled and LocalPlayer.Character then
-      local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-      if root then
-         root.Velocity = Vector3.new(0, 0, 0)
-         local move = Vector3.zero
-         if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += Camera.CFrame.LookVector end
-         if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= Camera.CFrame.LookVector end
-         if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= Camera.CFrame.RightVector end
-         if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += Camera.CFrame.RightVector end
-         root.CFrame = root.CFrame + move.Unit * (FlySettings.Speed * RunService.Heartbeat:Wait())
-      end
-   end
+-- Get Closest Player
+local function getClosestPlayer()
+    local closest, distance = nil, math.huge
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= Plr and v.Character and v.Character:FindFirstChild(settings.AimbotPart) then
+            local pos = Camera:WorldToViewportPoint(v.Character[settings.AimbotPart].Position)
+            local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+            if mag < settings.FOVSize and mag < distance then
+                closest, distance = v, mag
+            end
+        end
+    end
+    return closest
+end
 
-   for _,v in ipairs(Players:GetPlayers()) do
-      if v ~= LocalPlayer and HitboxSettings.Enabled and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-         v.Character.HumanoidRootPart.Size = Vector3.new(HitboxSettings.Size, HitboxSettings.Size, HitboxSettings.Size)
-         v.Character.HumanoidRootPart.CanCollide = false
-         v.Character.HumanoidRootPart.Transparency = 0.5
-      elseif v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-         v.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1)
-         v.Character.HumanoidRootPart.Transparency = 0
-         v.Character.HumanoidRootPart.CanCollide = true
-      end
-   end
+-- Aimbot
+RunService.RenderStepped:Connect(function()
+    if settings.Aimbot then
+        local target = getClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild(settings.AimbotPart) then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character[settings.AimbotPart].Position)
+        end
+    end
 end)
 
 -- Silent Aim (__namecall Hook)
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local old = mt.__namecall
+
 mt.__namecall = newcclosure(function(self, ...)
-   local args = {...}
-   local method = getnamecallmethod()
-   if SilentAimSettings.Enabled and method == "FireServer" and tostring(self) == "Shoot" then
-      for _,v in ipairs(Players:GetPlayers()) do
-         if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentAimSettings.Part) then
-            args[2] = v.Character[SilentAimSettings.Part].Position
-            break
-         end
-      end
-      return old(self, unpack(args))
-   end
-   return old(self, ...)
+    local args = {...}
+    if tostring(self) == "FireServer" and tostring(getnamecallmethod()) == "FireServer" then
+        if settings.SilentAim then
+            local target = getClosestPlayer()
+            if target and target.Character and target.Character:FindFirstChild(settings.SilentPart) then
+                args[2] = target.Character[settings.SilentPart].Position
+                return old(self, unpack(args))
+            end
+        end
+    end
+    return old(self, ...)
+end)
+
+-- Fly System
+local BodyVelocity = Instance.new("BodyVelocity")
+RunService.RenderStepped:Connect(function()
+    if settings.FlyToggle and Plr.Character and Plr.Character:FindFirstChild("HumanoidRootPart") then
+        BodyVelocity.Velocity = (Camera.CFrame.LookVector * settings.FlySpeed * 10)
+        BodyVelocity.Parent = Plr.Character.HumanoidRootPart
+    else
+        BodyVelocity.Velocity = Vector3.zero
+        BodyVelocity.Parent = nil
+    end
+end)
+
+-- ESP
+RunService.RenderStepped:Connect(function()
+    for _,v in pairs(Players:GetPlayers()) do
+        if v ~= Plr and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and not v.Character:FindFirstChild("ESPBox") then
+            local box = Instance.new("BoxHandleAdornment", v.Character)
+            box.Name = "ESPBox"
+            box.Adornee = v.Character
+            box.ZIndex = 5
+            box.Size = Vector3.new(3, 6, 1)
+            box.Transparency = 0.5
+            box.Color3 = Color3.new(1, 0, 0)
+            box.AlwaysOnTop = true
+        end
+    end
 end)
 
 -- Team Tags (leaderstats.Team)
+local function applyTeamTags()
+    for _,v in pairs(Players:GetPlayers()) do
+        if v:FindFirstChild("leaderstats") and v.leaderstats:FindFirstChild("Team") then
+            local teamName = v.leaderstats.Team.Value
+            if not v.Character:FindFirstChild("BillboardGui") then
+                local tag = Instance.new("BillboardGui", v.Character)
+                tag.Size = UDim2.new(0, 100, 0, 30)
+                tag.Adornee = v.Character:WaitForChild("Head")
+                tag.AlwaysOnTop = true
+
+                local label = Instance.new("TextLabel", tag)
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.TextColor3 = teamName == "Murderer" and Color3.new(1, 0, 0)
+                    or teamName == "Sheriff" and Color3.new(0, 0, 1)
+                    or teamName == "Innocent" and Color3.new(0, 1, 0)
+                    or Color3.new(1, 1, 1)
+                label.Text = "[" .. teamName .. "]"
+                label.TextScaled = true
+            end
+        end
+    end
+end
+Players.PlayerAdded:Connect(applyTeamTags)
+applyTeamTags()
+
+-- Hitbox Expander (ไม่ชนตัวเอง)
 RunService.RenderStepped:Connect(function()
-   for _,v in ipairs(Players:GetPlayers()) do
-      if v:FindFirstChild("leaderstats") and v.leaderstats:FindFirstChild("Team") and not v.Character:FindFirstChild("TeamTag") then
-         local tag = Instance.new("BillboardGui", v.Character:FindFirstChild("Head") or v.Character:FindFirstChild("HumanoidRootPart"))
-         tag.Name = "TeamTag"
-         tag.Size = UDim2.new(0, 100, 0, 40)
-         tag.StudsOffset = Vector3.new(0, 2, 0)
-         tag.AlwaysOnTop = true
-         local label = Instance.new("TextLabel", tag)
-         label.Size = UDim2.new(1, 0, 1, 0)
-         label.BackgroundTransparency = 1
-         label.Text = v.leaderstats.Team.Value
-         label.TextColor3 = v.leaderstats.Team.Value == "Innocent" and Color3.fromRGB(0, 255, 0)
-            or v.leaderstats.Team.Value == "Sheriff" and Color3.fromRGB(0, 100, 255)
-            or v.leaderstats.Team.Value == "Murderer" and Color3.fromRGB(255, 0, 0) or Color3.new(1, 1, 1)
-         label.TextScaled = true
-      end
-   end
+    for _,v in pairs(Players:GetPlayers()) do
+        if v ~= Plr and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = v.Character.HumanoidRootPart
+            hrp.Size = Vector3.new(settings.HitboxSize, settings.HitboxSize, settings.HitboxSize)
+            hrp.Transparency = 0.7
+            hrp.CanCollide = false
+        end
+    end
+end)
+
+-- UI Tabs & Toggles
+local AimbotTab = Window:CreateTab("🎯 Aimbot")
+AimbotTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) settings.Aimbot = v end})
+AimbotTab:CreateToggle({Name = "Enable Silent Aim", CurrentValue = false, Callback = function(v) settings.SilentAim = v end})
+AimbotTab:CreateDropdown({Name = "Lock Part", Options = {"Head", "HumanoidRootPart"}, CurrentOption = "Head", Callback = function(opt) settings.AimbotPart = opt; settings.SilentPart = opt end})
+AimbotTab:CreateSlider({Name = "FOV Size", Range = {50, 500}, Increment = 5, CurrentValue = 100, Callback = function(v) settings.FOVSize = v end})
+AimbotTab:CreateToggle({Name = "Show FOV Circle", CurrentValue = true, Callback = function(v) settings.ShowFOV = v end})
+
+local MovementTab = Window:CreateTab("🏃 Movement")
+MovementTab:CreateSlider({Name = "WalkSpeed", Range = {16, 200}, Increment = 1, CurrentValue = 16, Callback = function(v) Plr.Character.Humanoid.WalkSpeed = v end})
+MovementTab:CreateSlider({Name = "JumpPower", Range = {50, 500}, Increment = 10, CurrentValue = 50, Callback = function(v) Plr.Character.Humanoid.JumpPower = v end})
+MovementTab:CreateSlider({Name = "Fly Speed", Range = {1, 10}, Increment = 1, CurrentValue = 2, Callback = function(v) settings.FlySpeed = v end})
+MovementTab:CreateToggle({Name = "Enable Fly", CurrentValue = false, Callback = function(v) settings.FlyToggle = v end})
+
+local ExtraTab = Window:CreateTab("⚙️ Extra")
+ExtraTab:CreateToggle({Name = "Invisible", CurrentValue = false, Callback = function(v)
+    if Plr.Character and Plr.Character:FindFirstChild("Head") then
+        for _, part in pairs(Plr.Character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.Transparency = v and 1 or 0
+            end
+        end
+    end
+end})
+ExtraTab:CreateSlider({Name = "Hitbox Size", Range = {2, 500}, Increment = 2, CurrentValue = 2, Callback = function(v) settings.HitboxSize = v end})
+
+-- Toggle GUI
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        Rayfield:Toggle()
+    end
 end)
