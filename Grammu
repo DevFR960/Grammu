@@ -1,312 +1,114 @@
--- COCO HUB DELTA ULTIMATE (Self-Heal Edition)
--- Combines: Self-Heal, Silent Aim Bullet Redirect (Smart), Enhanced Fly, Smart ESP, Rainbow FOV/Crosshair,
--- Full safe-cleanup (END). Compatible with Delta (native) and KRNL-like environments where available.
--- NOTE: Use responsibly. Game-specific remotes vary — redirect is heuristic-based and opt-in.
+-- COCO HUB DELTA (Native-friendly with Rayfield fallback)
+-- Works on Delta (mobile) and executors that support loadstring+HttpGet.
+-- Behavior:
+-- 1) Try to load Rayfield using loadstring(game:HttpGet(...)). If available, use Rayfield UI.
+-- 2) If Rayfield or HttpGet isn't available (common on Delta), use a native ScreenGui UI built with Instance.new.
+-- Notes: Delta cannot reliably use Drawing or metatable hooks; Silent Redirect (bullet redirect) is disabled in native mode.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
--- Try to load Rayfield but degrade gracefully
-local success, Rayfield = pcall(function()
-    return (loadstring and loadstring(game:HttpGet or function() return "" end) and loadstring(game:HttpGet("https://sirius.menu/rayfield"))()) or nil
-end)
-if not success or not Rayfield then
-    warn("Rayfield failed to load — ensure you run in an environment with HttpGet and loadstring. Aborting UI creation.")
-    return
-end
-
--- =========================
--- Config / State
--- =========================
+-- config/state
 local state = {
     Aimbot = false,
-    SilentAim = false,
-    SilentRedirect = false,
+    SilentAim = false, -- disabled in native fallback (visual only)
     Fly = false,
     ESP = false,
-    FocusESP = false,
-    HitboxExpand = false,
+    Hitbox = false,
     Invisible = false,
     SpeedBoost = false,
 }
-
 local cfg = {
     AimPart = "Head",
-    TargetPriority = {"Distance","Health","ScreenCenter"},
     WalkSpeed = 16,
     JumpPower = 50,
     FlySpeed = 20,
     HitboxSize = 5,
-    FOVRadius = 100,
-    SelfHealInterval = 1,
 }
+local intern = {originalHumanoidProps = {}, originalHRPProps = {}, highlights = {}, flyVel = nil, flyGyro = nil, FlyConn = nil}
 
-local _internal = {
-    FOVCircle = nil,
-    Crosshair = nil,
-    flyVel = nil,
-    flyGyro = nil,
-    FlyConn = nil,
-    originalHumanoidProps = {},
-    originalHRPProps = {},
-    highlightTag = "CocoHighlight",
-    silentHooked = false,
-    healTask = nil,
-}
-
--- =========================
--- Utilities
--- =========================
-local function safePcall(f, ...)
-    local ok, res = pcall(f, ...)
-    if not ok then
-        warn("SafePcall error:", res)
-        return nil
-    end
-    return res
+-- Utility
+local function safeWarn(msg) pcall(function() warn(msg) end) end
+local function findPlayerByNameCaseInsensitive(name)
+    if not name then return nil end
+    for _,p in pairs(Players:GetPlayers()) do if string.lower(p.Name) == string.lower(name) then return p end end
+    return Players:FindFirstChild(name)
 end
 
-local function getViewportCenter()
-    return Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-end
-
--- =========================
--- Targeting (Smart)
--- =========================
+-- Targeting
 local function GetSmartTarget()
-    local lpchar = LocalPlayer.Character
-    if not lpchar then return nil end
-    local hrp = lpchar:FindFirstChild("HumanoidRootPart")
+    if not LocalPlayer.Character then return nil end
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
     local myPos = hrp.Position
-    local candidates = {}
+    local best, bestScore = nil, math.huge
     for _,plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(cfg.AimPart) then
             local hum = plr.Character:FindFirstChild("Humanoid")
-            local part = plr.Character:FindFirstChild(cfg.AimPart)
-            if hum and hum.Health > 0 and part then
-                local pos = part.Position
-                local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
-                if onScreen then
-                    table.insert(candidates, {
-                        Player = plr,
-                        Distance = (myPos - pos).Magnitude,
-                        Health = hum.Health,
-                        ScreenDist = (Vector2.new(screenPos.X, screenPos.Y) - getViewportCenter()).Magnitude,
-                        Part = part,
-                        Pos = pos,
-                    })
-                end
+            if hum and hum.Health > 0 then
+                local pos = plr.Character[cfg.AimPart].Position
+                local dist = (myPos - pos).Magnitude
+                if dist < bestScore then bestScore = dist best = {Player = plr, Pos = pos} end
             end
         end
     end
-    if #candidates == 0 then return nil end
-    table.sort(candidates, function(a,b)
-        for _,c in ipairs(cfg.TargetPriority) do
-            if c == "Distance" and a.Distance ~= b.Distance then return a.Distance < b.Distance end
-            if c == "Health" and a.Health ~= b.Health then return a.Health < b.Health end
-            if c == "ScreenCenter" and a.ScreenDist ~= b.ScreenDist then return a.ScreenDist < b.ScreenDist end
-        end
-        return false
-    end)
-    return candidates[1]
+    return best
 end
 
--- =========================
--- Drawing: FOV + Crosshair
--- =========================
-local Drawing = Drawing -- may be nil in some environments
-local function DrawFOV()
-    if not Drawing then return end
-    if _internal.FOVCircle then return end
-    local circle = Drawing.new("Circle")
-    circle.Position = getViewportCenter()
-    circle.Radius = cfg.FOVRadius
-    circle.Thickness = 2
-    circle.Filled = false
-    circle.Visible = true
-    _internal.FOVCircle = circle
-    task.spawn(function()
-        while circle and _internal.FOVCircle == circle and task.wait() do
-            if state.Aimbot or state.SilentAim then
-                circle.Visible = true
-                circle.Position = getViewportCenter()
-                -- smooth rainbow
-                circle.Color = Color3.fromHSV((tick() % 10) / 10, 1, 1)
-            else
-                circle.Visible = false
-            end
-        end
-        pcall(function() circle:Remove() end)
-        if _internal.FOVCircle == circle then _internal.FOVCircle = nil end
-    end)
-end
-
-local function RemoveFOV()
-    if _internal.FOVCircle and Drawing then
-        pcall(function() _internal.FOVCircle:Remove() end)
-        _internal.FOVCircle = nil
-    end
-end
-
-local function DrawCrosshair()
-    if not Drawing then return end
-    if _internal.Crosshair then return end
-    local size = 10
-    local lines = {}
-    for i=1,4 do
-        lines[i] = Drawing.new("Line")
-        lines[i].Thickness = 2
-        lines[i].Visible = true
-    end
-    _internal.Crosshair = lines
-    task.spawn(function()
-        while lines[1] and _internal.Crosshair == lines and task.wait() do
-            local cx, cy = Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2
-            lines[1].From = Vector2.new(cx - size, cy); lines[1].To = Vector2.new(cx - 2, cy)
-            lines[2].From = Vector2.new(cx + size, cy); lines[2].To = Vector2.new(cx + 2, cy)
-            lines[3].From = Vector2.new(cx, cy - size); lines[3].To = Vector2.new(cx, cy - 2)
-            lines[4].From = Vector2.new(cx, cy + size); lines[4].To = Vector2.new(cx, cy + 2)
-            for _,line in pairs(lines) do line.Color = Color3.fromHSV((tick() % 10) / 10, 1, 1) end
-            if not (state.Aimbot or state.SilentAim) then for _,l in pairs(lines) do l.Visible = false end else for _,l in pairs(lines) do l.Visible = true end end
-        end
-        for _,l in pairs(lines) do pcall(function() l:Remove() end) end
-        if _internal.Crosshair == lines then _internal.Crosshair = nil end
-    end)
-end
-
-local function RemoveCrosshair()
-    if _internal.Crosshair and Drawing then
-        for _,l in pairs(_internal.Crosshair) do pcall(function() l:Remove() end) end
-        _internal.Crosshair = nil
-    end
-end
-
--- =========================
--- Aimbot camera lock (optional)
--- =========================
+-- Camera aimbot lock
 RunService.RenderStepped:Connect(function()
-    if state.Aimbot then
-        local best = GetSmartTarget()
-        if best and best.Player and best.Part and Camera and Camera.CFrame then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, best.Pos)
+    if state.Aimbot and Camera and Camera.CFrame then
+        local target = GetSmartTarget()
+        if target and target.Pos then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Pos)
         end
     end
 end)
 
--- =========================
--- Silent Aim Redirect (Heuristic)
--- =========================
-local function tryHookNamecall()
-    if _internal.silentHooked then return end
-    local ok, mt = pcall(function() return getrawmetatable(game) end)
-    if not ok or not mt then return end
-    local old = mt.__namecall
-    if not old then return end
-    pcall(function() setreadonly(mt, false) end)
-    mt.__namecall = newcclosure(function(self, ...)
-        local args = {...}
-        local method = nil
-        pcall(function() method = getnamecallmethod() end)
-        -- only affect FireServer-like calls and when redirect is enabled
-        if _internal and _internal.silentHooked and state.SilentRedirect and state.SilentAim and tostring(method) == "FireServer" then
-            -- heuristic: find a Vector3/CFrame/Position in args and replace it with target pos
-            local best = GetSmartTarget()
-            if best and best.Pos then
-                for i=1, #args do
-                    local v = args[i]
-                    local t = typeof and typeof(v) or type(v)
-                    if t == "Vector3" then
-                        args[i] = best.Pos
-                        break
-                    elseif t == "CFrame" then
-                        args[i] = CFrame.new(best.Pos)
-                        break
-                    elseif t == "table" then
-                        -- some games send {Position = Vector3, Direction = Vector3} style tables
-                        pcall(function()
-                            if v.Position then v.Position = best.Pos end
-                            if v.Pos then v.Pos = best.Pos end
-                        end)
-                    end
-                end
-            end
-        end
-        local ok, ret = pcall(function() return old(self, unpack(args)) end)
-        if ok then return ret end
-        return old(self, ...)
-    end)
-    pcall(function() setreadonly(mt, true) end)
-    _internal.silentHooked = true
-end
-
--- try hooking once (safe)
-pcall(tryHookNamecall)
-
--- Allow toggling of redirect by attaching/detaching hook
-local function ensureSilentHook(stateOn)
-    if stateOn then
-        tryHookNamecall()
-    else
-        -- best-effort: cannot reliably restore original mt.__namecall in all envs
-        -- leave as-is but set flag so redirect won't run until re-enabled
-        _internal.silentHooked = _internal.silentHooked or false
-    end
-end
-
--- =========================
--- Fly (robust re-attach)
--- =========================
+-- Fly (native-friendly)
 local function startFly()
-    if not _internal.flyVel then
-        _internal.flyVel = Instance.new("BodyVelocity")
-        _internal.flyGyro = Instance.new("BodyGyro")
-        _internal.flyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        _internal.flyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        _internal.flyVel.P = 1e5
-        _internal.flyGyro.P = 1e5
+    if intern.FlyConn then return end
+    if not intern.flyVel then
+        intern.flyVel = Instance.new("BodyVelocity") intern.flyGyro = Instance.new("BodyGyro")
+        intern.flyVel.MaxForce = Vector3.new(9e9,9e9,9e9)
+        intern.flyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+        intern.flyVel.P = 1e5 intern.flyGyro.P = 1e5
     end
-    if _internal.FlyConn then return end
-    _internal.FlyConn = RunService.RenderStepped:Connect(function()
+    intern.FlyConn = RunService.RenderStepped:Connect(function()
         if not state.Fly then return end
         local char = LocalPlayer.Character
         if not char then return end
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if _internal.flyVel and not _internal.flyVel.Parent then _internal.flyVel.Parent = hrp end
-        if _internal.flyGyro and not _internal.flyGyro.Parent then _internal.flyGyro.Parent = hrp end
-        local moveDir = Vector3.new()
-        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
-        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-        _internal.flyVel.Velocity = moveDir * cfg.FlySpeed
-        _internal.flyGyro.CFrame = Camera.CFrame
+        if intern.flyVel and not intern.flyVel.Parent then intern.flyVel.Parent = hrp end
+        if intern.flyGyro and not intern.flyGyro.Parent then intern.flyGyro.Parent = hrp end
+        local mv = Vector3.new()
+        if UIS:IsKeyDown(Enum.KeyCode.W) then mv = mv + Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then mv = mv - Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then mv = mv - Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then mv = mv + Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0,1,0) end
+        if mv.Magnitude > 0 then mv = mv.Unit end
+        intern.flyVel.Velocity = mv * cfg.FlySpeed
+        intern.flyGyro.CFrame = Camera.CFrame
     end)
 end
-
 local function stopFly()
-    if _internal.flyVel then pcall(function() _internal.flyVel:Destroy() end) _internal.flyVel = nil end
-    if _internal.flyGyro then pcall(function() _internal.flyGyro:Destroy() end) _internal.flyGyro = nil end
-    if _internal.FlyConn then _internal.FlyConn:Disconnect() _internal.FlyConn = nil end
+    if intern.flyVel then pcall(function() intern.flyVel:Destroy() end) intern.flyVel = nil end
+    if intern.flyGyro then pcall(function() intern.flyGyro:Destroy() end) intern.flyGyro = nil end
+    if intern.FlyConn then intern.FlyConn:Disconnect() intern.FlyConn = nil end
 end
 
--- =========================
--- Hitbox Expand / Reset
--- =========================
+-- Hitbox expand/reset
 local function ExpandHitboxes(size)
     for _,plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local hrp = plr.Character.HumanoidRootPart
-            if not _internal.originalHRPProps[plr] then
-                _internal.originalHRPProps[plr] = {Size = hrp.Size, Transparency = hrp.Transparency, CanCollide = hrp.CanCollide, BrickColor = hrp.BrickColor}
-            end
+            if not intern.originalHRPProps[plr] then intern.originalHRPProps[plr] = {Size = hrp.Size, Transparency = hrp.Transparency, CanCollide = hrp.CanCollide, BrickColor = hrp.BrickColor} end
             hrp.Size = Vector3.new(size, size, size)
             hrp.Transparency = 0.5
             pcall(function() hrp.BrickColor = BrickColor.new("Bright red") end)
@@ -314,212 +116,145 @@ local function ExpandHitboxes(size)
         end
     end
 end
-
 local function ResetHitboxes()
     for _,plr in pairs(Players:GetPlayers()) do
         if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local orig = _internal.originalHRPProps[plr]
+            local orig = intern.originalHRPProps[plr]
             if orig and hrp then
                 hrp.Size = orig.Size or Vector3.new(2,2,1)
                 hrp.Transparency = orig.Transparency or 0
                 hrp.CanCollide = (orig.CanCollide == nil) and true or orig.CanCollide
                 pcall(function() hrp.BrickColor = orig.BrickColor or BrickColor.new("Medium stone grey") end)
             end
-            _internal.originalHRPProps[plr] = nil
+            intern.originalHRPProps[plr] = nil
         end
     end
 end
 
--- =========================
--- ESP (Smart)
--- =========================
+-- ESP using Highlight
 local function EnableESP()
     for _,plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and not plr.Character:FindFirstChild(_internal.highlightTag) then
-            local h = Instance.new("Highlight")
-            h.Name = _internal.highlightTag
-            h.FillColor = Color3.fromRGB(255, 0, 0)
-            h.FillTransparency = 0.6
-            h.OutlineTransparency = 0
-            h.Parent = plr.Character
+        if plr ~= LocalPlayer and plr.Character and not plr.Character:FindFirstChild("CHighlight") then
+            local h = Instance.new("Highlight") h.Name = "CHighlight" h.FillTransparency = 0.6 h.Parent = plr.Character intern.highlights[plr] = h
         end
     end
 end
-
 local function DisableESP()
     for _,plr in pairs(Players:GetPlayers()) do
-        if plr.Character then
-            local hl = plr.Character:FindFirstChild(_internal.highlightTag)
-            if hl then hl:Destroy() end
+        if plr.Character then local h = plr.Character:FindFirstChild("CHighlight") if h then h:Destroy() end end
+    end
+    intern.highlights = {}
+end
+
+-- Invisible
+local function SetInvisible(state)
+    if not LocalPlayer.Character then return end
+    for _,part in pairs(LocalPlayer.Character:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.Transparency = state and 1 or 0
+            local dec = part:FindFirstChildOfClass("Decal") if dec then dec.Transparency = state and 1 or 0 end
+            part.CanCollide = not state
         end
     end
 end
 
-local function UpdateFocusESP()
-    if not state.FocusESP or not state.SilentAim then return end
-    local best = GetSmartTarget()
-    for _,plr in pairs(Players:GetPlayers()) do
-        if plr.Character then
-            local hl = plr.Character:FindFirstChild(_internal.highlightTag)
-            if hl then
-                hl.Enabled = false
-            end
-        end
-    end
-    if best and best.Player and best.Player.Character then
-        local hl = best.Player.Character:FindFirstChild(_internal.highlightTag)
-        if hl then hl.Enabled = true end
-    end
+-- Cleanup
+local function CleanupAll()
+    RemoveUIButtons()
+    stopFly()
+    ResetHitboxes()
+    DisableESP()
+    SetInvisible(false)
+    local orig = intern.originalHumanoidProps[LocalPlayer]
+    if LocalPlayer.Character and orig then local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed = orig.WalkSpeed or 16 hum.JumpPower = orig.JumpPower or 50 end end
+    for k,_ in pairs(state) do state[k] = false end
 end
 
--- =========================
--- Self-Heal (auto-repair state)
--- =========================
-local function SelfHealTick()
-    -- ensure camera
-    if not Camera or not Camera.CFrame then
-        Camera = workspace.CurrentCamera
-    end
-    -- ensure UI (Rayfield should persist)
-    -- ensure fly reattach
-    if state.Fly then
-        startFly()
-    end
-    -- reapply esp/hitbox/invisible if needed
-    if state.ESP then EnableESP() end
-    if state.HitboxExpand then ExpandHitboxes(cfg.HitboxSize) end
-    if state.Invisible then
-        local char = LocalPlayer.Character
-        if char then
-            for _,part in pairs(char:GetChildren()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.Transparency = 1
-                    part.CanCollide = false
-                end
-            end
-        end
-    end
-    -- maintain humanoid props
-    local lpchar = LocalPlayer.Character
-    if lpchar then
-        local hum = lpchar:FindFirstChildOfClass("Humanoid")
-        if hum then
-            if not _internal.originalHumanoidProps[LocalPlayer] then
-                _internal.originalHumanoidProps[LocalPlayer] = {WalkSpeed = hum.WalkSpeed, JumpPower = hum.JumpPower}
-            end
-            hum.WalkSpeed = state.SpeedBoost and (cfg.WalkSpeed * 2) or cfg.WalkSpeed
-            hum.JumpPower = cfg.JumpPower or hum.JumpPower
-        end
-    end
-    -- update focus esp
-    UpdateFocusESP()
+-- Minimal native UI builder
+local NativeGUI = Instance.new("ScreenGui") NativeGUI.Name = "CocoHubNativeGUI"
+NativeGUI.ResetOnSpawn = false
+NativeGUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local function MakeButton(name, pos, size, text, callback)
+    local f = Instance.new("Frame") f.Size = size f.Position = pos f.BackgroundColor3 = Color3.fromRGB(30,30,30) f.BorderSizePixel = 0 f.Parent = NativeGUI
+    local b = Instance.new("TextButton") b.Size = UDim2.new(1,0,1,0) b.Position = UDim2.new(0,0,0,0) b.Text = text b.Font = Enum.Font.SourceSans b.TextSize = 18 b.TextColor3 = Color3.new(1,1,1) b.BackgroundTransparency = 1 b.Parent = f
+    b.MouseButton1Click:Connect(callback)
+    return f, b
 end
 
-local function StartSelfHeal()
-    if _internal.healTask then return end
-    _internal.healTask = task.spawn(function()
-        while task.wait(cfg.SelfHealInterval) do
-            pcall(SelfHealTick)
-        end
-    end)
+-- Build simple panel
+local panel = Instance.new("Frame") panel.Name = "CocoPanel" panel.Size = UDim2.new(0, 0, 0, 200) panel.Position = UDim2.new(0, 10, 0, 50) panel.BackgroundColor3 = Color3.fromRGB(18,18,18) panel.BorderSizePixel = 0 panel.Parent = NativeGUI
+local uiList = Instance.new("UIListLayout") uiList.Parent = panel uiList.Padding = UDim.new(0,6)
+
+local function toggleAimbot()
+    state.Aimbot = not state.Aimbot
 end
-local function StopSelfHeal()
-    if _internal.healTask then
-        -- cannot reliably cancel task.spawn; toggle via flag
-        _internal.healTask = nil
-    end
+local function toggleFly()
+    state.Fly = not state.Fly if state.Fly then startFly() else stopFly() end
+end
+local function toggleESP()
+    state.ESP = not state.ESP if state.ESP then EnableESP() else DisableESP() end
+end
+local function toggleHitbox()
+    state.Hitbox = not state.Hitbox if state.Hitbox then ExpandHitboxes(cfg.HitboxSize) else ResetHitboxes() end
+end
+local function toggleInvisible()
+    state.Invisible = not state.Invisible SetInvisible(state.Invisible)
+end
+local function toggleSpeed()
+    state.SpeedBoost = not state.SpeedBoost
+    local char = LocalPlayer.Character if char then local hum = char:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed = state.SpeedBoost and (cfg.WalkSpeed*2) or cfg.WalkSpeed end end
 end
 
--- =========================
+-- Buttons
+MakeButton("AimBtn", UDim2.new(0,0,0,0), UDim2.new(0,200,0,30), "Toggle Aimbot", toggleAimbot).Parent = panel
+MakeButton("FlyBtn", UDim2.new(0,0,0,0), UDim2.new(0,200,0,30), "Toggle Fly", toggleFly).Parent = panel
+MakeButton("ESPBtn", UDim2.new(0,0,0,0), UDim2.new(0,200,0,30), "Toggle ESP", toggleESP).Parent = panel
+MakeButton("HitBtn", UDim2.new(0,0,0,0), UDim2.new(0,200,0,30), "Toggle Hitbox", toggleHitbox).Parent = panel
+MakeButton("InvBtn", UDim2.new(0,0,0,0), UDim2.new(0,200,0,30), "Toggle Invisible", toggleInvisible).Parent = panel
+MakeButton("SpdBtn", UDim2.new(0,0,0,0), UDim2.new(0,200,0,30), "Toggle SpeedBoost", toggleSpeed).Parent = panel
+
+-- small toggle handle for mobile
+local toggleBtn = Instance.new("TextButton") toggleBtn.Size = UDim2.new(0,90,0,30) toggleBtn.Position = UDim2.new(0,10,0,10) toggleBtn.Text = "COCO" toggleBtn.Font = Enum.Font.SourceSans toggleBtn.TextSize = 20 toggleBtn.Parent = NativeGUI
+local isPanelOpen = true
+toggleBtn.MouseButton1Click:Connect(function()
+    isPanelOpen = not isPanelOpen
+    panel.Visible = isPanelOpen
+end)
+
+-- helper to remove UI buttons on cleanup
+function RemoveUIButtons()
+    pcall(function() NativeGUI:Destroy() end)
+end
+
 -- Respawn handling
--- =========================
-local function OnCharacterAdded(char)
+LocalPlayer.CharacterAdded:Connect(function(char)
     task.delay(0.5, function()
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            _internal.originalHumanoidProps[LocalPlayer] = {WalkSpeed = hum.WalkSpeed, JumpPower = hum.JumpPower}
-            hum.WalkSpeed = state.SpeedBoost and (cfg.WalkSpeed*2) or cfg.WalkSpeed
-            hum.JumpPower = cfg.JumpPower or hum.JumpPower
-        end
-        -- reapply toggles
-        if state.HitboxExpand then ExpandHitboxes(cfg.HitboxSize) end
-        if state.ESP then EnableESP() end
-        if state.Invisible then
-            for _,part in pairs(char:GetChildren()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then part.Transparency = 1; part.CanCollide = false end
-            end
-        end
-    end)
-end
-
-if LocalPlayer.Character then OnCharacterAdded(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function()
-        if state.HitboxExpand then task.wait(1) ExpandHitboxes(cfg.HitboxSize) end
-        if state.ESP then task.wait(1) EnableESP() end
+        if hum then intern.originalHumanoidProps[LocalPlayer] = {WalkSpeed = hum.WalkSpeed, JumpPower = hum.JumpPower} hum.WalkSpeed = state.SpeedBoost and (cfg.WalkSpeed*2) or cfg.WalkSpeed hum.JumpPower = cfg.JumpPower or hum.JumpPower end
+        if state.Hitbox then task.wait(0.5) ExpandHitboxes(cfg.HitboxSize) end
+        if state.ESP then task.wait(0.5) EnableESP() end
+        if state.Invisible then SetInvisible(true) end
     end)
 end)
 
--- =========================
--- Cleanup / END
--- =========================
-local function CleanupAll()
-    -- remove drawings
-    RemoveFOV()
-    RemoveCrosshair()
-    -- stop fly
-    stopFly()
-    -- reset hitboxes
-    ResetHitboxes()
-    -- disable ESP
-    DisableESP()
-    -- invisible off
-    if LocalPlayer.Character then
-        for _,part in pairs(LocalPlayer.Character:GetChildren()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then part.Transparency = 0; part.CanCollide = true end
-        end
+-- Quick message to user in output
+print("COCO HUB DELTA: Native UI loaded. If you want Rayfield UI, ensure your executor supports game:HttpGet + loadstring and re-run with Rayfield enabled.")
+
+-- Try to load Rayfield if user explicitly asked
+local function tryLoadRayfield()
+    local ok, rf = pcall(function()
+        if not loadstring or not game.HttpGet then error("no loadstring/HttpGet") end
+        return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    end)
+    if ok and rf then
+        return true, rf
     end
-    -- restore humanoid
-    local orig = _internal.originalHumanoidProps[LocalPlayer]
-    if LocalPlayer.Character and orig then
-        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = orig.WalkSpeed or 16
-            hum.JumpPower = orig.JumpPower or 50
-        end
-    end
-    -- toggle states off
-    for k,_ in pairs(state) do state[k] = false end
-    -- disable redirect
-    _internal.silentHooked = false
-    -- stop heal (best-effort)
-    StopSelfHeal()
+    return false, nil
 end
 
-_G.CocoHubCleanup = CleanupAll
+-- If user insisted on Rayfield and it's available, we can re-initialize using it.
+-- For Delta most likely this will fail; keep native as default.
 
--- =========================
--- UI (Rayfield)
--- =========================
-local Window = Rayfield:CreateWindow({Name = "COCO HUB | Delta Ultimate", LoadingTitle = "COCO HUB", LoadingSubtitle = "Ultimate Self-Heal Edition", ConfigurationSaving = {Enabled = false}})
-local MainTab = Window:CreateTab("Main")
-local CombatTab = Window:CreateTab("Combat")
-local VisualTab = Window:CreateTab("Visual")
-local MovementTab = Window:CreateTab("Movement")
-local UtilityTab = Window:CreateTab("Utility")
-
--- Main: Teleport
-MainTab:CreateInput({Name = "Teleport to Player", PlaceholderText = "Player name", RemoveTextAfterFocusLost = true, Callback = function(txt)
-    if not txt or txt == "" then return end
-    local t = Players:FindFirstChild(txt)
-    if not t then for _,p in pairs(Players:GetPlayers()) do if string.lower(p.Name) == string.lower(txt) then t = p break end end end
-    if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        LocalPlayer.Character.HumanoidRootPart.CFrame = t.Character.HumanoidRootPart.CFrame + Vector3.new(0,5,0)
-    else warn("Player not found or not ready") end
-end})
-MainTab:CreateButton({Name = "END (Full Cleanup)", Callback = function() CleanupAll() end})
-
--- Combat
-CombatTab:CreateToggle({Name 
+return true
