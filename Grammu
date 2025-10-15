@@ -39,49 +39,147 @@ end
 
 -- ================= ArrayField UI =================
 local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-local Window = ArrayField:CreateWindow({Name="COCO HUB | Delta Pro Ultimate", Size=Vector2.new(350,500)})
+local Window = ArrayField:CreateWindow({
+    Name = "COCO HUB | Delta Pro Ultimate",
+    Size = Vector2.new(400,500),
+    KeySystem = false
+})
 
--- ================= Tabs =================
+-- Tabs
 local CombatTab = Window:CreateTab("Combat")
 local MoveTab = Window:CreateTab("Movement")
 local ESPTab = Window:CreateTab("ESP")
 local MiscTab = Window:CreateTab("Misc")
 
 -- ================= Combat =================
-CombatTab:CreateToggle("Aimbot", false, function(v) State.Aimbot=v end)
-CombatTab:CreateToggle("Silent Aim", false, function(v) State.SilentAim=v end)
-CombatTab:CreateSlider("Hitbox Size", 10, 500, 1, State.HitboxSize, function(v) State.HitboxSize=v end)
-CombatTab:CreateDropdown("Aimbot Part", {"Head","HumanoidRootPart"}, State.AimbotPart, function(v) State.AimbotPart=v end)
-CombatTab:CreateSlider("FOV Radius", 50, 1000, 1, State.FOVRadius, function(v) State.FOVRadius=v end)
-CombatTab:CreateToggle("Rainbow FOV", true, function(v) State.FOVRainbow=v end)
+local CombatSection = CombatTab:CreateSection("Combat Features", false)
+
+CombatSection:CreateToggle({
+    Name = "Aimbot",
+    CurrentValue = State.Aimbot,
+    Flag = "AimbotToggle",
+    Callback = function(v) State.Aimbot=v end
+})
+
+CombatSection:CreateToggle({
+    Name = "Silent Aim",
+    CurrentValue = State.SilentAim,
+    Flag = "SilentAimToggle",
+    Callback = function(v) State.SilentAim=v end
+})
+
+CombatSection:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {10,500},
+    Increment = 1,
+    CurrentValue = State.HitboxSize,
+    Flag = "HitboxSlider",
+    Callback = function(v) State.HitboxSize=v end
+})
+
+CombatSection:CreateDropdown({
+    Name = "Aimbot Part",
+    Options = {"Head","HumanoidRootPart"},
+    CurrentOption = State.AimbotPart,
+    MultiSelection = false,
+    Flag = "AimbotPartDropdown",
+    Callback = function(v) State.AimbotPart=v end
+})
+
+CombatSection:CreateSlider({
+    Name = "FOV Radius",
+    Range = {50,1000},
+    Increment = 1,
+    CurrentValue = State.FOVRadius,
+    Flag = "FOVRadiusSlider",
+    Callback = function(v) State.FOVRadius=v end
+})
+
+CombatSection:CreateToggle({
+    Name = "Rainbow FOV",
+    CurrentValue = State.FOVRainbow,
+    Flag = "RainbowFOVToggle",
+    Callback = function(v) State.FOVRainbow=v end
+})
 
 -- ================= Movement =================
-MoveTab:CreateSlider("WalkSpeed", 16, 200, 1, State.WalkSpeed, function(v) State.WalkSpeed=v end)
-MoveTab:CreateSlider("JumpPower", 50, 300, 1, State.JumpPower, function(v) State.JumpPower=v end)
-MoveTab:CreateToggle("Fly", false, function(v) State.Fly=v end)
-MoveTab:CreateSlider("Fly Speed", 10, 200, 1, State.FlySpeed, function(v) State.FlySpeed=v end)
+local MoveSection = MoveTab:CreateSection("Movement Features", false)
+
+MoveSection:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16,200},
+    Increment = 1,
+    CurrentValue = State.WalkSpeed,
+    Flag = "WalkSpeedSlider",
+    Callback = function(v) State.WalkSpeed=v end
+})
+
+MoveSection:CreateSlider({
+    Name = "JumpPower",
+    Range = {50,300},
+    Increment = 1,
+    CurrentValue = State.JumpPower,
+    Flag = "JumpPowerSlider",
+    Callback = function(v) State.JumpPower=v end
+})
+
+MoveSection:CreateToggle({
+    Name = "Fly",
+    CurrentValue = State.Fly,
+    Flag = "FlyToggle",
+    Callback = function(v) State.Fly=v end
+})
+
+MoveSection:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10,200},
+    Increment = 1,
+    CurrentValue = State.FlySpeed,
+    Flag = "FlySpeedSlider",
+    Callback = function(v) State.FlySpeed=v end
+})
 
 -- ================= ESP =================
-ESPTab:CreateToggle("Enable ESP", true, function(v) State.ESP=v end)
-ESPTab:CreateToggle("Target ESP", true, function(v) State.TargetESP=v end)
+local ESPSection = ESPTab:CreateSection("ESP Features", false)
+
+ESPSection:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = State.ESP,
+    Flag = "ESPEnableToggle",
+    Callback = function(v) State.ESP=v end
+})
+
+ESPSection:CreateToggle({
+    Name = "Target ESP",
+    CurrentValue = State.TargetESP,
+    Flag = "TargetESPToggle",
+    Callback = function(v) State.TargetESP=v end
+})
 
 -- ================= Misc =================
-MiscTab:CreateToggle("Invisible", false, function(v) State.Invisible=v end)
+local MiscSection = MiscTab:CreateSection("Misc Features", false)
 
--- ================= Hotkey to Toggle UI =================
+MiscSection:CreateToggle({
+    Name = "Invisible",
+    CurrentValue = State.Invisible,
+    Flag = "InvisibleToggle",
+    Callback = function(v) State.Invisible=v end
+})
+
+-- ================= Hotkey toggle GUI =================
 UIS.InputBegan:Connect(function(input,gp)
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
+    if input.KeyCode==Enum.KeyCode.RightShift then
         Window:Toggle()
     end
 end)
 
--- ================= Invisible =================
+-- ================= Invisible System =================
 local InvisibleStore = {}
 
 local function applyInvisible(char)
     if not char or InvisibleStore[char] then return end
-    InvisibleStore[char] = {}
+    InvisibleStore[char]={}
     for _,part in pairs(char:GetChildren()) do
         if part:IsA("BasePart") then
             InvisibleStore[char][part]={Transparency=part.Transparency,CanCollide=part.CanCollide}
@@ -103,84 +201,74 @@ local function restoreInvisible(char)
             pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end)
         end
     end
-    InvisibleStore[char] = nil
+    InvisibleStore[char]=nil
 end
-
-local lastInvisible = false
-RunService.Heartbeat:Connect(function()
-    if State.Invisible ~= lastInvisible then
-        lastInvisible = State.Invisible
-        if State.Invisible then
-            if LocalPlayer.Character then applyInvisible(LocalPlayer.Character) end
-        else
-            if LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
-        end
-    end
-end)
 
 LocalPlayer.CharacterAdded:Connect(function(ch)
     if State.Invisible then applyInvisible(ch) end
 end)
 
 -- ================= ESP + FOV + Targeting =================
-local ESPObjects = {}
-local FOVCircle = safeDrawing.available and newDrawing("Circle",{Color=Color3.fromRGB(0,255,255),Thickness=2,Filled=false,Visible=true,Radius=State.FOVRadius}) or nil
-local CurrentTarget = nil
+local ESPObjects={}
+local FOVCircle=nil
+if safeDrawing.available then
+    FOVCircle=newDrawing("Circle",{Color=Color3.fromRGB(0,255,255), Thickness=2, Filled=false, Visible=true, Radius=State.FOVRadius})
+end
 
+local CurrentTarget=nil
 RunService.RenderStepped:Connect(function()
     local vw,vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
 
     if FOVCircle then
         if State.FOVRainbow then
             local hue = (tick()%5)/5
-            pcall(function() FOVCircle.Color = Color3.fromHSV(hue,1,1) end)
+            pcall(function() FOVCircle.Color=Color3.fromHSV(hue,1,1) end)
         end
-        pcall(function() FOVCircle.Position = Vector2.new(vw/2,vh/2); FOVCircle.Radius = State.FOVRadius end)
+        pcall(function() FOVCircle.Position=Vector2.new(vw/2,vh/2); FOVCircle.Radius=State.FOVRadius end)
     end
 
-    local char = LocalPlayer.Character
+    local char=LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
-        local hrp = char.HumanoidRootPart
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end) end
+        local hrp=char.HumanoidRootPart
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        if hum then pcall(function() hum.WalkSpeed=State.WalkSpeed; hum.JumpPower=State.JumpPower end) end
 
         if State.Fly then
-            local camCF = Camera.CFrame
-            local moveDir = Vector3.new()
-            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-            if moveDir.Magnitude > 0 then
-                pcall(function() hrp.Velocity = moveDir.Unit * State.FlySpeed end)
+            local camCF=Camera.CFrame
+            local moveDir=Vector3.new()
+            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir=moveDir+camCF.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir=moveDir-camCF.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir=moveDir-camCF.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir=moveDir+camCF.RightVector end
+            if moveDir.Magnitude>0 then
+                pcall(function() hrp.Velocity=moveDir.Unit*State.FlySpeed end)
             else
-                pcall(function() hrp.Velocity = Vector3.new(0,0,0) end)
+                pcall(function() hrp.Velocity=Vector3.new(0,0,0) end)
             end
         end
     end
 
-    -- Hitbox
     if State.Hitbox then
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                pcall(function() p.Character.HumanoidRootPart.Size = Vector3.new(State.HitboxSize,State.HitboxSize,State.HitboxSize) end)
+                pcall(function() p.Character.HumanoidRootPart.Size=Vector3.new(State.HitboxSize,State.HitboxSize,State.HitboxSize) end)
             end
         end
     end
 
     -- Acquire target
-    CurrentTarget = nil
+    CurrentTarget=nil
     if State.Aimbot or State.SilentAim then
-        local best = State.FOVRadius
+        local best=State.FOVRadius
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild(State.AimbotPart) then
-                local pos3 = p.Character[State.AimbotPart].Position
-                local sp,onScreen = Camera:WorldToViewportPoint(pos3)
+                local pos3=p.Character[State.AimbotPart].Position
+                local sp,onScreen=Camera:WorldToViewportPoint(pos3)
                 if onScreen then
-                    local d = (Vector2.new(sp.X,sp.Y) - Vector2.new(vw/2,vh/2)).Magnitude
-                    if d < best then
-                        best = d
-                        CurrentTarget = p
+                    local d=(Vector2.new(sp.X,sp.Y)-Vector2.new(vw/2,vh/2)).Magnitude
+                    if d<best then
+                        best=d
+                        CurrentTarget=p
                     end
                 end
             end
@@ -191,18 +279,18 @@ RunService.RenderStepped:Connect(function()
     if State.ESP then
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local box = ESPObjects[p] or newDrawing("Square",{Color=Color3.fromRGB(255,0,0),Thickness=2,Filled=false,Visible=false})
-                ESPObjects[p] = box
-                local sp,onScreen = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                local box = ESPObjects[p] or newDrawing("Square",{Color=Color3.fromRGB(255,0,0), Thickness=2, Filled=false, Visible=false})
+                ESPObjects[p]=box
+                local sp,onScreen=Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
                 if onScreen then
                     pcall(function()
-                        box.Position = Vector2.new(sp.X-25, sp.Y-25)
-                        box.Size = Vector2.new(50,50)
-                        box.Visible = true
+                        box.Position=Vector2.new(sp.X-25,sp.Y-25)
+                        box.Size=Vector2.new(50,50)
+                        box.Visible=true
                         if State.TargetESP and CurrentTarget then
-                            box.Color = (p==CurrentTarget) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
+                            box.Color=(p==CurrentTarget) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
                         else
-                            box.Color = Color3.fromRGB(255,0,0)
+                            box.Color=Color3.fromRGB(255,0,0)
                         end
                     end)
                 else
