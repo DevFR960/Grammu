@@ -1,5 +1,5 @@
--- COCO HUB | Delta/Xeno/KRNL Compatible (All-in-One Rayfield UI)
--- Invisible via GitHub
+-- COCO HUB | Delta Full Version | Rayfield UI All-in-One
+-- Supports: KRNL / Delta / Xeno | Features: WalkSpeed, Jump, Fly, Invisible, ESP, Aimbot, SilentAim
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -22,7 +22,7 @@ local State = {
 
 -- ================= Helpers =================
 local function safeLoadstring(url)
-    local ok, res = pcall(function()
+    local ok,res = pcall(function()
         local body = game:HttpGet(url)
         local fn = loadstring(body)
         if type(fn)=="function" then return fn() else return fn end
@@ -38,7 +38,7 @@ end
 
 local function newDrawing(kind, props)
     if not safeDrawing.available then return nil end
-    local ok, obj = pcall(function() return Drawing.new(kind) end)
+    local ok,obj = pcall(function() return Drawing.new(kind) end)
     if not ok or not obj then return nil end
     if props then
         for k,v in pairs(props) do pcall(function() obj[k]=v end) end
@@ -47,27 +47,25 @@ local function newDrawing(kind, props)
 end
 
 -- ================= Rayfield UI =================
-local Rayfield = safeLoadstring("https://sirius.menu/rayfield")
-if not Rayfield or type(Rayfield.CreateWindow)~="function" then
-    return warn("Rayfield failed to load")
-end
+local function LoadRayfieldUI()
+    local Rayfield = safeLoadstring("https://sirius.menu/rayfield")
+    if not Rayfield or type(Rayfield.CreateWindow)~="function" then return warn("Rayfield failed to load") end
 
-local Window = Rayfield:CreateWindow({
-    Name="COCO HUB | Delta Pro Ultimate",
-    LoadingTitle="COCO HUB Loading",
-    ConfigFolder="COCO_HUB_Delta"
-})
-Window:Show()
+    local Window = Rayfield:CreateWindow({
+        Name="COCO HUB | Delta Pro Ultimate",
+        LoadingTitle="COCO HUB Loading",
+        ConfigFolder="COCO_HUB_Delta"
+    })
 
--- ================= Build UI =================
-local function buildUI()
+    task.wait(0.5)
+
     -- Tabs
     local MainTab = Window:CreateTab("Combat")
     local MoveTab = Window:CreateTab("Movement")
     local ESPTab = Window:CreateTab("ESP")
     local MiscTab = Window:CreateTab("Misc")
 
-    -- Combat Section
+    -- Combat
     local CombatSection = MainTab:CreateSection("Combat")
     CombatSection:CreateToggle({Name="Aimbot", CurrentValue=false, Callback=function(v) State.Aimbot=v end})
     CombatSection:CreateToggle({Name="Silent Aim", CurrentValue=false, Callback=function(v) State.SilentAim=v end})
@@ -76,24 +74,24 @@ local function buildUI()
     CombatSection:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=120, Callback=function(v) State.FOVRadius=v end})
     CombatSection:CreateToggle({Name="Rainbow FOV", CurrentValue=true, Callback=function(v) State.FOVRainbow=v end})
 
-    -- Movement Section
+    -- Movement
     local MoveSection = MoveTab:CreateSection("Player")
     MoveSection:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=16, Callback=function(v) State.WalkSpeed=v end})
     MoveSection:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=50, Callback=function(v) State.JumpPower=v end})
     MoveSection:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) State.Fly=v end})
     MoveSection:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=40, Callback=function(v) State.FlySpeed=v end})
 
-    -- ESP Section
+    -- ESP
     local ESPSection = ESPTab:CreateSection("ESP")
     ESPSection:CreateToggle({Name="Enable ESP", CurrentValue=true, Callback=function(v) State.ESP=v end})
     ESPSection:CreateToggle({Name="Target ESP", CurrentValue=true, Callback=function(v) State.TargetESP=v end})
 
-    -- Misc Section
+    -- Misc
     local MiscSection = MiscTab:CreateSection("Misc")
     MiscSection:CreateToggle({Name="Invisible (GitHub)", CurrentValue=false, Callback=function(v) State.Invisible=v end})
 
-    -- Hotkey: toggle UI
-    UIS.InputBegan:Connect(function(input, gp)
+    -- Hotkey toggle UI
+    UIS.InputBegan:Connect(function(input,gp)
         if gp then return end
         if input.KeyCode==Enum.KeyCode.RightShift then
             Window:Toggle()
@@ -101,7 +99,7 @@ local function buildUI()
     end)
 end
 
-buildUI()
+LoadRayfieldUI()
 
 -- ================= Invisible =================
 local InvisibleFn = safeLoadstring("https://raw.githubusercontent.com/DevFR960/Grammu/refs/heads/main/Grammu")
@@ -109,15 +107,15 @@ local InvisibleStore = {}
 
 local function applyInvisible(char)
     if not char or InvisibleStore[char] then return end
-    InvisibleStore[char] = {}
-    for _, part in pairs(char:GetChildren()) do
+    InvisibleStore[char]={}
+    for _,part in pairs(char:GetChildren()) do
         if part:IsA("BasePart") then
-            InvisibleStore[char][part] = {Transparency=part.Transparency, CanCollide=part.CanCollide}
+            InvisibleStore[char][part]={Transparency=part.Transparency,CanCollide=part.CanCollide}
             pcall(function() part.Transparency=1; part.CanCollide=false end)
         elseif part:IsA("Accessory") then
             local handle = part:FindFirstChildWhichIsA("BasePart")
             if handle then
-                InvisibleStore[char][handle] = {Transparency=handle.Transparency, CanCollide=handle.CanCollide}
+                InvisibleStore[char][handle]={Transparency=handle.Transparency,CanCollide=handle.CanCollide}
                 pcall(function() handle.Transparency=1; handle.CanCollide=false end)
             end
         end
@@ -126,12 +124,12 @@ end
 
 local function restoreInvisible(char)
     if not char or not InvisibleStore[char] then return end
-    for part, props in pairs(InvisibleStore[char]) do
+    for part,props in pairs(InvisibleStore[char]) do
         if part and part.Parent then
             pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end)
         end
     end
-    InvisibleStore[char] = nil
+    InvisibleStore[char]=nil
 end
 
 local lastInvisible=false
@@ -161,16 +159,9 @@ if safeDrawing.available then
     FOVCircle=newDrawing("Circle",{Color=Color3.fromRGB(0,255,255), Thickness=2, Filled=false, Visible=true, Radius=State.FOVRadius})
 end
 
-local function CreateESP(p)
-    if ESPObjects[p] then return ESPObjects[p] end
-    local box = newDrawing("Square",{Color=Color3.fromRGB(255,0,0), Thickness=2, Filled=false, Visible=false})
-    ESPObjects[p]=box
-    return box
-end
-
 local CurrentTarget=nil
 RunService.RenderStepped:Connect(function()
-    local vw, vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
+    local vw,vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
 
     if FOVCircle then
         if State.FOVRainbow then
@@ -232,7 +223,8 @@ RunService.RenderStepped:Connect(function()
     if State.ESP then
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local box=CreateESP(p)
+                local box = ESPObjects[p] or newDrawing("Square",{Color=Color3.fromRGB(255,0,0), Thickness=2, Filled=false, Visible=false})
+                ESPObjects[p]=box
                 local sp,onScreen=Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
                 if onScreen then
                     pcall(function()
@@ -256,3 +248,4 @@ RunService.RenderStepped:Connect(function()
 end)
 
 print("COCO HUB Loaded | Rayfield UI | GitHub Invisible")
+
