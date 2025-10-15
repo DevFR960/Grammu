@@ -16,7 +16,8 @@ local State = {
     FOVRadius=120, FOVRainbow=false,
     ESP=true, TargetESP=true,
     HitboxSize=10,
-    ESPColor=Color3.fromRGB(255,0,0)
+    ESPColor=Color3.fromRGB(255,0,0),
+    HitboxColor=Color3.fromRGB(0,255,0)
 }
 
 -- ================= Helpers =================
@@ -45,15 +46,15 @@ local CombatTab = Window:CreateTab("Combat")
 local ESPTab = Window:CreateTab("ESP")
 local MiscTab = Window:CreateTab("Misc")
 
--- Combat
+-- ================= Combat =================
 CombatTab:CreateToggle({
     Name="Aimbot",
-    CurrentValue=false,
+    CurrentValue=State.Aimbot,
     Callback=function(v) State.Aimbot=v end
 })
 CombatTab:CreateToggle({
     Name="Silent Aim",
-    CurrentValue=false,
+    CurrentValue=State.SilentAim,
     Callback=function(v) State.SilentAim=v end
 })
 CombatTab:CreateDropdown({
@@ -73,12 +74,12 @@ CombatTab:CreateSlider({
 })
 CombatTab:CreateToggle({
     Name="Rainbow FOV",
-    CurrentValue=false,
+    CurrentValue=State.FOVRainbow,
     Callback=function(v) State.FOVRainbow=v end
 })
 CombatTab:CreateToggle({
     Name="Hitbox Expand",
-    CurrentValue=false,
+    CurrentValue=State.Hitbox,
     Callback=function(v) State.Hitbox=v end
 })
 CombatTab:CreateSlider({
@@ -89,16 +90,21 @@ CombatTab:CreateSlider({
     Suffix="",
     Callback=function(v) State.HitboxSize=v end
 })
+CombatTab:CreateColorPicker({
+    Name="Hitbox Color",
+    Color=State.HitboxColor,
+    Callback=function(v) State.HitboxColor=v end
+})
 
--- ESP
+-- ================= ESP =================
 ESPTab:CreateToggle({
     Name="Enable ESP",
-    CurrentValue=true,
+    CurrentValue=State.ESP,
     Callback=function(v) State.ESP=v end
 })
 ESPTab:CreateToggle({
     Name="Target ESP",
-    CurrentValue=true,
+    CurrentValue=State.TargetESP,
     Callback=function(v) State.TargetESP=v end
 })
 ESPTab:CreateColorPicker({
@@ -107,14 +113,14 @@ ESPTab:CreateColorPicker({
     Callback=function(v) State.ESPColor=v end
 })
 
--- Misc
+-- ================= Misc =================
 MiscTab:CreateToggle({
     Name="Invisible",
-    CurrentValue=false,
+    CurrentValue=State.Invisible,
     Callback=function(v) State.Invisible=v end
 })
 
--- GUI Toggle Hotkey
+-- ================= GUI Toggle Hotkey =================
 UIS.InputBegan:Connect(function(input,gp)
     if gp then return end
     if input.KeyCode==Enum.KeyCode.RightShift then
@@ -187,11 +193,15 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Hitbox
+    -- Hitbox Expand
     if State.Hitbox then
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                pcall(function() p.Character.HumanoidRootPart.Size=Vector3.new(State.HitboxSize,State.HitboxSize,State.HitboxSize) end)
+                local hrp=p.Character.HumanoidRootPart
+                pcall(function() hrp.Size=Vector3.new(State.HitboxSize,State.HitboxSize,State.HitboxSize) end)
+                if hrp:FindFirstChild("Box") then
+                    hrp.Box.Color=State.HitboxColor
+                end
             end
         end
     end
