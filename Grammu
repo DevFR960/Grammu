@@ -1,198 +1,24 @@
--- COCO HUB | Delta Full Version | ArrayField UI
--- Supports: KRNL / Delta / Xeno
--- Features: WalkSpeed, Jump, Fly, Invisible, ESP, Aimbot, Silent Aim, Hitbox, FOV
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Camera = Workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
-
--- ================= State =================
-local State = {
-    Aimbot=false, SilentAim=false,
-    Hitbox=false, Invisible=false,
-    Fly=false, FlySpeed=40,
-    WalkSpeed=16, JumpPower=50,
-    AimbotPart="Head",
-    FOVRadius=120, FOVRainbow=false,  -- false ตอนเริ่ม
-    ESP=true, TargetESP=true,
-    HitboxSize=10
-}
-
--- ================= Helpers =================
-local safeDrawing = {}
-do
-    local ok, DrawingLib = pcall(function() return Drawing end)
-    safeDrawing.available = ok and DrawingLib~=nil
-end
-
-local function newDrawing(kind, props)
-    if not safeDrawing.available then return nil end
-    local ok,obj = pcall(function() return Drawing.new(kind) end)
-    if not ok or not obj then return nil end
-    if props then
-        for k,v in pairs(props) do pcall(function() obj[k]=v end) end
-    end
-    return obj
-end
-
--- ================= ArrayField UI =================
-local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-local Window = ArrayField:CreateWindow({Name="COCO HUB | Delta Pro Ultimate", Size=Vector2.new(300,400)})
-
--- Tabs
-local CombatTab = Window:CreateTab("Combat")
-local MoveTab = Window:CreateTab("Movement")
-local ESPTab = Window:CreateTab("ESP")
-local MiscTab = Window:CreateTab("Misc")
-
--- ================= Combat =================
-CombatTab:CreateToggle({
-    Name="Aimbot",
-    CurrentValue=false,
-    Callback=function(v) State.Aimbot=v end
-})
-CombatTab:CreateToggle({
-    Name="Silent Aim",
-    CurrentValue=false,
-    Callback=function(v) State.SilentAim=v end
-})
-CombatTab:CreateSlider({
-    Name="Hitbox Size",
-    Range={10,500},
-    Increment=1,
-    CurrentValue=State.HitboxSize,
-    Callback=function(v) State.HitboxSize=v end
-})
-CombatTab:CreateDropdown({
-    Name="Aimbot Part",
-    Options={"Head","HumanoidRootPart"},
-    CurrentOption=State.AimbotPart,
-    Callback=function(v) State.AimbotPart=v end
-})
-CombatTab:CreateSlider({
-    Name="FOV Radius",
-    Range={50,1000},
-    Increment=1,
-    CurrentValue=State.FOVRadius,
-    Callback=function(v) State.FOVRadius=v end
-})
-CombatTab:CreateToggle({
-    Name="Rainbow FOV",
-    CurrentValue=false,
-    Callback=function(v) State.FOVRainbow=v end
-})
-
--- ================= Movement =================
-MoveTab:CreateSlider({
-    Name="WalkSpeed",
-    Range={16,200},
-    Increment=1,
-    CurrentValue=State.WalkSpeed,
-    Callback=function(v) State.WalkSpeed=v end
-})
-MoveTab:CreateSlider({
-    Name="JumpPower",
-    Range={50,300},
-    Increment=1,
-    CurrentValue=State.JumpPower,
-    Callback=function(v) State.JumpPower=v end
-})
-MoveTab:CreateToggle({
-    Name="Fly",
-    CurrentValue=false,
-    Callback=function(v) State.Fly=v end
-})
-MoveTab:CreateSlider({
-    Name="Fly Speed",
-    Range={10,200},
-    Increment=1,
-    CurrentValue=State.FlySpeed,
-    Callback=function(v) State.FlySpeed=v end
-})
-
 -- ================= ESP =================
-ESPTab:CreateToggle({
-    Name="Enable ESP",
-    CurrentValue=true,
-    Callback=function(v) State.ESP=v end
-})
-ESPTab:CreateToggle({
-    Name="Target ESP",
-    CurrentValue=true,
-    Callback=function(v) State.TargetESP=v end
-})
-
--- ================= Misc =================
-MiscTab:CreateToggle({
-    Name="Invisible",
-    CurrentValue=false,
-    Callback=function(v) State.Invisible=v end
-})
-
--- ================= Hotkey =================
-UIS.InputBegan:Connect(function(input,gp)
-    if gp then return end
-    if input.KeyCode==Enum.KeyCode.RightShift then
-        Window:Toggle()
-    end
-end)
-
--- ================= Invisible =================
-local InvisibleStore = {}
-local function applyInvisible(char)
-    if not char or InvisibleStore[char] then return end
-    InvisibleStore[char]={}
-    for _,part in pairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            InvisibleStore[char][part]={Transparency=part.Transparency,CanCollide=part.CanCollide}
-            pcall(function() part.Transparency=1; part.CanCollide=false end)
-        elseif part:IsA("Accessory") then
-            local handle = part:FindFirstChildWhichIsA("BasePart")
-            if handle then
-                InvisibleStore[char][handle]={Transparency=handle.Transparency,CanCollide=handle.CanCollide}
-                pcall(function() handle.Transparency=1; handle.CanCollide=false end)
-            end
-        end
-    end
-end
-local function restoreInvisible(char)
-    if not char or not InvisibleStore[char] then return end
-    for part,props in pairs(InvisibleStore[char]) do
-        if part and part.Parent then
-            pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end)
-        end
-    end
-    InvisibleStore[char]=nil
-end
-local lastInvisible=false
-RunService.Heartbeat:Connect(function()
-    if State.Invisible~=lastInvisible then
-        lastInvisible=State.Invisible
-        if State.Invisible and LocalPlayer.Character then
-            applyInvisible(LocalPlayer.Character)
-        elseif LocalPlayer.Character then
-            restoreInvisible(LocalPlayer.Character)
-        end
-    end
-end)
-LocalPlayer.CharacterAdded:Connect(function(ch)
-    if State.Invisible then applyInvisible(ch) end
-end)
-
--- ================= ESP + FOV + Targeting =================
 local ESPObjects={}
+local ESPColor = Color3.fromRGB(255,0,0) -- default color
 local FOVCircle=nil
 if safeDrawing.available then
     FOVCircle=newDrawing("Circle",{Color=Color3.fromRGB(0,255,255), Thickness=2, Filled=false, Visible=true, Radius=State.FOVRadius})
 end
 
-local CurrentTarget=nil
+-- Color picker ใน UI สำหรับ ESP
+ESPTab:CreateColorPicker({
+    Name="ESP Color",
+    Color=ESPColor,
+    Callback=function(value)
+        ESPColor = value
+    end
+})
+
 RunService.RenderStepped:Connect(function()
     local vw,vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
 
+    -- FOV Circle
     if FOVCircle then
         if State.FOVRainbow then
             local hue=(tick()%5)/5
@@ -201,6 +27,7 @@ RunService.RenderStepped:Connect(function()
         pcall(function() FOVCircle.Position=Vector2.new(vw/2,vh/2); FOVCircle.Radius=State.FOVRadius end)
     end
 
+    -- Update LocalPlayer
     local char=LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         local hrp=char.HumanoidRootPart
@@ -249,27 +76,44 @@ RunService.RenderStepped:Connect(function()
             end
         end
     end
-end)
 
--- ================= Silent Aim Hook (Simple) =================
-local mt=getrawmetatable(game)
-local oldNamecall=mt.__namecall
-local oldIndex=mt.__index
-setreadonly(mt,false)
-mt.__namecall=newcclosure(function(self,...)
-    local method=getnamecallmethod()
-    local args={...}
-    if (tostring(method)=="FireServer") and CurrentTarget and State.SilentAim then
-        if args[2] and typeof(args[2])=="Vector3" then
-            -- Redirect bullet to target part
-            if CurrentTarget.Character and CurrentTarget.Character:FindFirstChild(State.AimbotPart) then
-                args[2]=CurrentTarget.Character[State.AimbotPart].Position
+    -- ================= Update ESP =================
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local box = ESPObjects[p] or {}
+            if not box.Outline then
+                box.Outline = newDrawing("Square",{Color=ESPColor, Thickness=2, Filled=false, Visible=true})
+                box.Text = newDrawing("Text",{Text="", Color=ESPColor, Size=15, Center=true, Visible=true})
+                ESPObjects[p]=box
             end
-            return oldNamecall(self,unpack(args))
+
+            local hrp = p.Character.HumanoidRootPart
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum then
+                local sp,onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if onScreen then
+                    -- square size
+                    local sizeY = 50
+                    local sizeX = 30
+                    pcall(function()
+                        box.Outline.Position = Vector2.new(sp.X - sizeX/2, sp.Y - sizeY/2)
+                        box.Outline.Size = Vector2.new(sizeX, sizeY)
+                        box.Outline.Color = ESPColor
+                        box.Outline.Visible = State.ESP
+
+                        -- health text
+                        box.Text.Position = Vector2.new(sp.X, sp.Y - sizeY/2 - 10)
+                        box.Text.Text = "HP: "..math.floor(hum.Health).."/"..hum.MaxHealth
+                        box.Text.Color = ESPColor
+                        box.Text.Visible = State.ESP
+                    end)
+                else
+                    pcall(function()
+                        box.Outline.Visible=false
+                        box.Text.Visible=false
+                    end)
+                end
+            end
         end
     end
-    return oldNamecall(self,...)
 end)
-setreadonly(mt,true)
-
-print("COCO HUB Loaded | ArrayField UI | Silent Aim + Rainbow FOV Toggle Fixed")
