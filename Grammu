@@ -1,55 +1,193 @@
--- ================= ESP =================
+-- COCO HUB | Delta Full Version | ArrayField UI
+-- Supports: KRNL / Delta / Xeno
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- ================= State =================
+local State = {
+    Aimbot=false, SilentAim=false,
+    Hitbox=false, Invisible=false,
+    AimbotPart="Head",
+    FOVRadius=120, FOVRainbow=false,
+    ESP=true, TargetESP=true,
+    HitboxSize=10,
+    ESPColor=Color3.fromRGB(255,0,0)
+}
+
+-- ================= Helpers =================
+local safeDrawing = {}
+do
+    local ok, DrawingLib = pcall(function() return Drawing end)
+    safeDrawing.available = ok and DrawingLib~=nil
+end
+
+local function newDrawing(kind, props)
+    if not safeDrawing.available then return nil end
+    local ok,obj = pcall(function() return Drawing.new(kind) end)
+    if not ok or not obj then return nil end
+    if props then
+        for k,v in pairs(props) do pcall(function() obj[k]=v end) end
+    end
+    return obj
+end
+
+-- ================= ArrayField UI =================
+local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
+local Window = ArrayField:CreateWindow({Name="COCO HUB | Delta Pro Ultimate", Size=Vector2.new(300,400)})
+
+-- Tabs
+local CombatTab = Window:CreateTab("Combat")
+local ESPTab = Window:CreateTab("ESP")
+local MiscTab = Window:CreateTab("Misc")
+
+-- Combat
+CombatTab:CreateToggle({
+    Name="Aimbot",
+    CurrentValue=false,
+    Callback=function(v) State.Aimbot=v end
+})
+CombatTab:CreateToggle({
+    Name="Silent Aim",
+    CurrentValue=false,
+    Callback=function(v) State.SilentAim=v end
+})
+CombatTab:CreateDropdown({
+    Name="Aimbot Part",
+    Options={"Head","HumanoidRootPart"},
+    CurrentOption=State.AimbotPart,
+    MultiSelection=false,
+    Callback=function(v) State.AimbotPart=v end
+})
+CombatTab:CreateSlider({
+    Name="FOV Radius",
+    Range={50,1000},
+    Increment=1,
+    CurrentValue=State.FOVRadius,
+    Suffix="",
+    Callback=function(v) State.FOVRadius=v end
+})
+CombatTab:CreateToggle({
+    Name="Rainbow FOV",
+    CurrentValue=false,
+    Callback=function(v) State.FOVRainbow=v end
+})
+CombatTab:CreateToggle({
+    Name="Hitbox Expand",
+    CurrentValue=false,
+    Callback=function(v) State.Hitbox=v end
+})
+CombatTab:CreateSlider({
+    Name="Hitbox Size",
+    Range={10,500},
+    Increment=1,
+    CurrentValue=State.HitboxSize,
+    Suffix="",
+    Callback=function(v) State.HitboxSize=v end
+})
+
+-- ESP
+ESPTab:CreateToggle({
+    Name="Enable ESP",
+    CurrentValue=true,
+    Callback=function(v) State.ESP=v end
+})
+ESPTab:CreateToggle({
+    Name="Target ESP",
+    CurrentValue=true,
+    Callback=function(v) State.TargetESP=v end
+})
+ESPTab:CreateColorPicker({
+    Name="ESP Color",
+    Color=State.ESPColor,
+    Callback=function(v) State.ESPColor=v end
+})
+
+-- Misc
+MiscTab:CreateToggle({
+    Name="Invisible",
+    CurrentValue=false,
+    Callback=function(v) State.Invisible=v end
+})
+
+-- GUI Toggle Hotkey
+UIS.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.KeyCode==Enum.KeyCode.RightShift then
+        Window:Toggle()
+    end
+end)
+
+-- ================= Invisible =================
+local InvisibleStore={}
+local function applyInvisible(char)
+    if not char or InvisibleStore[char] then return end
+    InvisibleStore[char]={}
+    for _,part in pairs(char:GetChildren()) do
+        if part:IsA("BasePart") then
+            InvisibleStore[char][part]={Transparency=part.Transparency,CanCollide=part.CanCollide}
+            pcall(function() part.Transparency=1; part.CanCollide=false end)
+        elseif part:IsA("Accessory") then
+            local handle = part:FindFirstChildWhichIsA("BasePart")
+            if handle then
+                InvisibleStore[char][handle]={Transparency=handle.Transparency,CanCollide=handle.CanCollide}
+                pcall(function() handle.Transparency=1; handle.CanCollide=false end)
+            end
+        end
+    end
+end
+local function restoreInvisible(char)
+    if not char or not InvisibleStore[char] then return end
+    for part,props in pairs(InvisibleStore[char]) do
+        if part and part.Parent then
+            pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end)
+        end
+    end
+    InvisibleStore[char]=nil
+end
+local lastInvisible=false
+RunService.Heartbeat:Connect(function()
+    if State.Invisible~=lastInvisible then
+        lastInvisible=State.Invisible
+        if State.Invisible then
+            if LocalPlayer.Character then applyInvisible(LocalPlayer.Character) end
+        else
+            if LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
+        end
+    end
+end)
+LocalPlayer.CharacterAdded:Connect(function(ch)
+    if State.Invisible then applyInvisible(ch) end
+end)
+
+-- ================= ESP + FOV + Targeting =================
 local ESPObjects={}
-local ESPColor = Color3.fromRGB(255,0,0) -- default color
 local FOVCircle=nil
 if safeDrawing.available then
     FOVCircle=newDrawing("Circle",{Color=Color3.fromRGB(0,255,255), Thickness=2, Filled=false, Visible=true, Radius=State.FOVRadius})
 end
 
--- Color picker ใน UI สำหรับ ESP
-ESPTab:CreateColorPicker({
-    Name="ESP Color",
-    Color=ESPColor,
-    Callback=function(value)
-        ESPColor = value
-    end
-})
-
+local CurrentTarget=nil
 RunService.RenderStepped:Connect(function()
     local vw,vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
 
     -- FOV Circle
     if FOVCircle then
+        FOVCircle.Position = Vector2.new(vw/2,vh/2)
+        FOVCircle.Radius = State.FOVRadius
         if State.FOVRainbow then
             local hue=(tick()%5)/5
             pcall(function() FOVCircle.Color=Color3.fromHSV(hue,1,1) end)
-        end
-        pcall(function() FOVCircle.Position=Vector2.new(vw/2,vh/2); FOVCircle.Radius=State.FOVRadius end)
-    end
-
-    -- Update LocalPlayer
-    local char=LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local hrp=char.HumanoidRootPart
-        local hum=char:FindFirstChildOfClass("Humanoid")
-        if hum then pcall(function() hum.WalkSpeed=State.WalkSpeed; hum.JumpPower=State.JumpPower end) end
-
-        if State.Fly then
-            local camCF=Camera.CFrame
-            local moveDir=Vector3.new()
-            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir=moveDir+camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir=moveDir-camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir=moveDir-camCF.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir=moveDir+camCF.RightVector end
-            if moveDir.Magnitude>0 then
-                pcall(function() hrp.Velocity=moveDir.Unit*State.FlySpeed end)
-            else
-                pcall(function() hrp.Velocity=Vector3.new(0,0,0) end)
-            end
+        else
+            FOVCircle.Color=Color3.fromRGB(0,255,255)
         end
     end
 
-    -- Hitbox expand
+    -- Hitbox
     if State.Hitbox then
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -58,16 +196,16 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Acquire target for Aimbot / SilentAim
+    -- Acquire Target
     CurrentTarget=nil
     if State.Aimbot or State.SilentAim then
-        local best=State.FOVRadius
+        local best = State.FOVRadius
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild(State.AimbotPart) then
-                local pos3=p.Character[State.AimbotPart].Position
-                local sp,onScreen=Camera:WorldToViewportPoint(pos3)
+                local pos3 = p.Character[State.AimbotPart].Position
+                local sp,onScreen = Camera:WorldToViewportPoint(pos3)
                 if onScreen then
-                    local d=(Vector2.new(sp.X,sp.Y)-Vector2.new(vw/2,vh/2)).Magnitude
+                    local d = (Vector2.new(sp.X,sp.Y)-Vector2.new(vw/2,vh/2)).Magnitude
                     if d<best then
                         best=d
                         CurrentTarget=p
@@ -77,13 +215,13 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- ================= Update ESP =================
+    -- ================= ESP =================
     for _,p in pairs(Players:GetPlayers()) do
         if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local box = ESPObjects[p] or {}
             if not box.Outline then
-                box.Outline = newDrawing("Square",{Color=ESPColor, Thickness=2, Filled=false, Visible=true})
-                box.Text = newDrawing("Text",{Text="", Color=ESPColor, Size=15, Center=true, Visible=true})
+                box.Outline = newDrawing("Square",{Color=State.ESPColor, Thickness=2, Filled=false, Visible=true})
+                box.Text = newDrawing("Text",{Text="", Color=State.ESPColor, Size=15, Center=true, Visible=true})
                 ESPObjects[p]=box
             end
 
@@ -92,28 +230,42 @@ RunService.RenderStepped:Connect(function()
             if hrp and hum then
                 local sp,onScreen = Camera:WorldToViewportPoint(hrp.Position)
                 if onScreen then
-                    -- square size
                     local sizeY = 50
                     local sizeX = 30
                     pcall(function()
                         box.Outline.Position = Vector2.new(sp.X - sizeX/2, sp.Y - sizeY/2)
                         box.Outline.Size = Vector2.new(sizeX, sizeY)
-                        box.Outline.Color = ESPColor
+                        box.Outline.Color = State.ESPColor
                         box.Outline.Visible = State.ESP
 
-                        -- health text
                         box.Text.Position = Vector2.new(sp.X, sp.Y - sizeY/2 - 10)
                         box.Text.Text = "HP: "..math.floor(hum.Health).."/"..hum.MaxHealth
-                        box.Text.Color = ESPColor
+                        box.Text.Color = State.ESPColor
                         box.Text.Visible = State.ESP
                     end)
                 else
-                    pcall(function()
-                        box.Outline.Visible=false
-                        box.Text.Visible=false
-                    end)
+                    pcall(function() box.Outline.Visible=false; box.Text.Visible=false end)
                 end
             end
         end
     end
 end)
+
+-- ================= Silent Aim Hook =================
+local mt=getrawmetatable(game)
+local oldNamecall=mt.__namecall
+setreadonly(mt,false)
+mt.__namecall=newcclosure(function(self,...)
+    local method=checkcaller() and nil or getnamecallmethod()
+    local args={...}
+    if State.SilentAim and CurrentTarget and method=="FireServer" then
+        if args[2]=="Hit" and args[3]==nil and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild(State.AimbotPart) then
+            args[3]=CurrentTarget.Character[State.AimbotPart].Position
+            return oldNamecall(self,unpack(args))
+        end
+    end
+    return oldNamecall(self,...)
+end)
+setreadonly(mt,true)
+
+print("COCO HUB Loaded | Full Features (Movement excluded)")
