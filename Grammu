@@ -21,15 +21,6 @@ local State = {
 }
 
 -- ================= Helpers =================
-local function safeLoadstring(url)
-    local ok,res = pcall(function()
-        local body = game:HttpGet(url)
-        local fn = loadstring(body)
-        if type(fn)=="function" then return fn() else return fn end
-    end)
-    return ok and res or nil
-end
-
 local safeDrawing = {}
 do
     local ok, DrawingLib = pcall(function() return Drawing end)
@@ -48,8 +39,12 @@ end
 
 -- ================= Rayfield UI =================
 local function LoadRayfieldUI()
-    local Rayfield = safeLoadstring("https://sirius.menu/rayfield")
-    if not Rayfield or type(Rayfield.CreateWindow)~="function" then return warn("Rayfield failed to load") end
+    local success, Rayfield = pcall(function()
+        return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    end)
+    if not success or type(Rayfield.CreateWindow)~="function" then
+        return warn("Rayfield failed to load")
+    end
 
     local Window = Rayfield:CreateWindow({
         Name="COCO HUB | Delta Pro Ultimate",
@@ -67,28 +62,67 @@ local function LoadRayfieldUI()
 
     -- Combat
     local CombatSection = MainTab:CreateSection("Combat")
-    CombatSection:CreateToggle({Name="Aimbot", CurrentValue=false, Callback=function(v) State.Aimbot=v end})
-    CombatSection:CreateToggle({Name="Silent Aim", CurrentValue=false, Callback=function(v) State.SilentAim=v end})
-    CombatSection:CreateSlider({Name="Hitbox Size", Range={10,500}, Increment=1, CurrentValue=10, Callback=function(v) State.HitboxSize=v end})
-    CombatSection:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption="Head", Callback=function(v) State.AimbotPart=v end})
-    CombatSection:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=120, Callback=function(v) State.FOVRadius=v end})
-    CombatSection:CreateToggle({Name="Rainbow FOV", CurrentValue=true, Callback=function(v) State.FOVRainbow=v end})
+    CombatSection:CreateToggle({
+        Name="Aimbot", CurrentValue=false, Flag="Aimbot",
+        Callback=function(v) State.Aimbot=v print("Aimbot:",v) end
+    })
+    CombatSection:CreateToggle({
+        Name="Silent Aim", CurrentValue=false, Flag="SilentAim",
+        Callback=function(v) State.SilentAim=v print("SilentAim:",v) end
+    })
+    CombatSection:CreateSlider({
+        Name="Hitbox Size", Range={10,500}, Increment=1, CurrentValue=10, Flag="HitboxSize",
+        Callback=function(v) State.HitboxSize=v end
+    })
+    CombatSection:CreateDropdown({
+        Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption="Head", Flag="AimbotPart",
+        Callback=function(v) State.AimbotPart=v end
+    })
+    CombatSection:CreateSlider({
+        Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=120, Flag="FOVRadius",
+        Callback=function(v) State.FOVRadius=v end
+    })
+    CombatSection:CreateToggle({
+        Name="Rainbow FOV", CurrentValue=true, Flag="FOVRainbow",
+        Callback=function(v) State.FOVRainbow=v end
+    })
 
     -- Movement
     local MoveSection = MoveTab:CreateSection("Player")
-    MoveSection:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=16, Callback=function(v) State.WalkSpeed=v end})
-    MoveSection:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=50, Callback=function(v) State.JumpPower=v end})
-    MoveSection:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) State.Fly=v end})
-    MoveSection:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=40, Callback=function(v) State.FlySpeed=v end})
+    MoveSection:CreateSlider({
+        Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=16, Flag="WalkSpeed",
+        Callback=function(v) State.WalkSpeed=v end
+    })
+    MoveSection:CreateSlider({
+        Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=50, Flag="JumpPower",
+        Callback=function(v) State.JumpPower=v end
+    })
+    MoveSection:CreateToggle({
+        Name="Fly", CurrentValue=false, Flag="Fly",
+        Callback=function(v) State.Fly=v end
+    })
+    MoveSection:CreateSlider({
+        Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=40, Flag="FlySpeed",
+        Callback=function(v) State.FlySpeed=v end
+    })
 
     -- ESP
     local ESPSection = ESPTab:CreateSection("ESP")
-    ESPSection:CreateToggle({Name="Enable ESP", CurrentValue=true, Callback=function(v) State.ESP=v end})
-    ESPSection:CreateToggle({Name="Target ESP", CurrentValue=true, Callback=function(v) State.TargetESP=v end})
+    ESPSection:CreateToggle({
+        Name="Enable ESP", CurrentValue=true, Flag="ESP",
+        Callback=function(v) State.ESP=v end
+    })
+    ESPSection:CreateToggle({
+        Name="Target ESP", CurrentValue=true, Flag="TargetESP",
+        Callback=function(v) State.TargetESP=v end
+    })
 
     -- Misc
     local MiscSection = MiscTab:CreateSection("Misc")
-    MiscSection:CreateToggle({Name="Invisible (GitHub)", CurrentValue=false, Callback=function(v) State.Invisible=v end})
+    MiscSection:CreateToggle({
+        Name="Invisible", CurrentValue=false, Flag="Invisible",
+        Callback=function(v) State.Invisible=v end
+    })
 
     -- Hotkey toggle UI
     UIS.InputBegan:Connect(function(input,gp)
@@ -102,7 +136,6 @@ end
 LoadRayfieldUI()
 
 -- ================= Invisible =================
-local InvisibleFn = safeLoadstring("https://raw.githubusercontent.com/DevFR960/Grammu/refs/heads/main/Grammu")
 local InvisibleStore = {}
 
 local function applyInvisible(char)
@@ -137,7 +170,6 @@ RunService.Heartbeat:Connect(function()
     if State.Invisible~=lastInvisible then
         lastInvisible=State.Invisible
         if State.Invisible then
-            if InvisibleFn then pcall(InvisibleFn) end
             if LocalPlayer.Character then applyInvisible(LocalPlayer.Character) end
         else
             if LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
@@ -146,10 +178,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 LocalPlayer.CharacterAdded:Connect(function(ch)
-    if State.Invisible then
-        if InvisibleFn then pcall(InvisibleFn) end
-        applyInvisible(ch)
-    end
+    if State.Invisible then applyInvisible(ch) end
 end)
 
 -- ================= ESP + FOV + Targeting =================
@@ -247,5 +276,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("COCO HUB Loaded | Rayfield UI | GitHub Invisible")
-
+print("COCO HUB Loaded | Rayfield UI | Full Features")
