@@ -1,5 +1,6 @@
 -- COCO HUB | Delta Full Version | ArrayField UI
 -- Supports: KRNL / Delta / Xeno
+-- Features: WalkSpeed, Jump, Fly, Invisible, ESP, Aimbot, Silent Aim, Hitbox, FOV
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -15,7 +16,7 @@ local State = {
     Fly=false, FlySpeed=40,
     WalkSpeed=16, JumpPower=50,
     AimbotPart="Head",
-    FOVRadius=120, FOVRainbow=true,
+    FOVRadius=120, FOVRainbow=false,  -- false ตอนเริ่ม
     ESP=true, TargetESP=true,
     HitboxSize=10
 }
@@ -39,12 +40,7 @@ end
 
 -- ================= ArrayField UI =================
 local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-local Window = ArrayField:CreateWindow({
-        Name = "COCO HUB | Delta Pro Ultimate",
-        LoadingTitle = "COCO HUB Loading",
-        ConfigurationSaving = {Enabled=true, FileName="COCO_HUB_Delta"},
-        KeySystem=false
-    })
+local Window = ArrayField:CreateWindow({Name="COCO HUB | Delta Pro Ultimate", Size=Vector2.new(300,400)})
 
 -- Tabs
 local CombatTab = Window:CreateTab("Combat")
@@ -52,78 +48,91 @@ local MoveTab = Window:CreateTab("Movement")
 local ESPTab = Window:CreateTab("ESP")
 local MiscTab = Window:CreateTab("Misc")
 
--- Combat Section
-local CombatSection = CombatTab:CreateSection("Combat Features",false)
-local AimbotToggle = CombatTab:CreateToggle({
-    Name="Aimbot", SectionParent=CombatSection, CurrentValue=false,
+-- ================= Combat =================
+CombatTab:CreateToggle({
+    Name="Aimbot",
+    CurrentValue=false,
     Callback=function(v) State.Aimbot=v end
 })
-local SilentAimToggle = CombatTab:CreateToggle({
-    Name="SilentAim", SectionParent=CombatSection, CurrentValue=false,
+CombatTab:CreateToggle({
+    Name="Silent Aim",
+    CurrentValue=false,
     Callback=function(v) State.SilentAim=v end
 })
-local HitboxSlider = CombatTab:CreateSlider({
-    Name="Hitbox Size", SectionParent=CombatSection,
-    Range={10,500}, Increment=1, CurrentValue=State.HitboxSize,
+CombatTab:CreateSlider({
+    Name="Hitbox Size",
+    Range={10,500},
+    Increment=1,
+    CurrentValue=State.HitboxSize,
     Callback=function(v) State.HitboxSize=v end
 })
-local AimbotPartDropdown = CombatTab:CreateDropdown({
-    Name="Aimbot Part", SectionParent=CombatSection,
-    Options={"Head","HumanoidRootPart"}, CurrentOption=State.AimbotPart,
-    MultiSelection=false,
+CombatTab:CreateDropdown({
+    Name="Aimbot Part",
+    Options={"Head","HumanoidRootPart"},
+    CurrentOption=State.AimbotPart,
     Callback=function(v) State.AimbotPart=v end
 })
-local FOVSlider = CombatTab:CreateSlider({
-    Name="FOV Radius", SectionParent=CombatSection,
-    Range={50,1000}, Increment=1, CurrentValue=State.FOVRadius,
+CombatTab:CreateSlider({
+    Name="FOV Radius",
+    Range={50,1000},
+    Increment=1,
+    CurrentValue=State.FOVRadius,
     Callback=function(v) State.FOVRadius=v end
 })
-local RainbowFOVToggle = CombatTab:CreateToggle({
-    Name="Rainbow FOV", SectionParent=CombatSection, CurrentValue=true,
+CombatTab:CreateToggle({
+    Name="Rainbow FOV",
+    CurrentValue=false,
     Callback=function(v) State.FOVRainbow=v end
 })
 
--- Movement Section
-local MoveSection = MoveTab:CreateSection("Movement Features",false)
-local WalkSpeedSlider = MoveTab:CreateSlider({
-    Name="WalkSpeed", SectionParent=MoveSection,
-    Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed,
+-- ================= Movement =================
+MoveTab:CreateSlider({
+    Name="WalkSpeed",
+    Range={16,200},
+    Increment=1,
+    CurrentValue=State.WalkSpeed,
     Callback=function(v) State.WalkSpeed=v end
 })
-local JumpPowerSlider = MoveTab:CreateSlider({
-    Name="JumpPower", SectionParent=MoveSection,
-    Range={50,300}, Increment=1, CurrentValue=State.JumpPower,
+MoveTab:CreateSlider({
+    Name="JumpPower",
+    Range={50,300},
+    Increment=1,
+    CurrentValue=State.JumpPower,
     Callback=function(v) State.JumpPower=v end
 })
-local FlyToggle = MoveTab:CreateToggle({
-    Name="Fly", SectionParent=MoveSection, CurrentValue=false,
+MoveTab:CreateToggle({
+    Name="Fly",
+    CurrentValue=false,
     Callback=function(v) State.Fly=v end
 })
-local FlySpeedSlider = MoveTab:CreateSlider({
-    Name="Fly Speed", SectionParent=MoveSection,
-    Range={10,200}, Increment=1, CurrentValue=State.FlySpeed,
+MoveTab:CreateSlider({
+    Name="Fly Speed",
+    Range={10,200},
+    Increment=1,
+    CurrentValue=State.FlySpeed,
     Callback=function(v) State.FlySpeed=v end
 })
 
--- ESP Section
-local ESPSection = ESPTab:CreateSection("ESP Features",false)
-local ESPEnableToggle = ESPTab:CreateToggle({
-    Name="Enable ESP", SectionParent=ESPSection, CurrentValue=true,
+-- ================= ESP =================
+ESPTab:CreateToggle({
+    Name="Enable ESP",
+    CurrentValue=true,
     Callback=function(v) State.ESP=v end
 })
-local TargetESPToggle = ESPTab:CreateToggle({
-    Name="Target ESP", SectionParent=ESPSection, CurrentValue=true,
+ESPTab:CreateToggle({
+    Name="Target ESP",
+    CurrentValue=true,
     Callback=function(v) State.TargetESP=v end
 })
 
--- Misc Section
-local MiscSection = MiscTab:CreateSection("Misc Features",false)
-local InvisibleToggle = MiscTab:CreateToggle({
-    Name="Invisible", SectionParent=MiscSection, CurrentValue=false,
+-- ================= Misc =================
+MiscTab:CreateToggle({
+    Name="Invisible",
+    CurrentValue=false,
     Callback=function(v) State.Invisible=v end
 })
 
--- Hotkey toggle GUI
+-- ================= Hotkey =================
 UIS.InputBegan:Connect(function(input,gp)
     if gp then return end
     if input.KeyCode==Enum.KeyCode.RightShift then
@@ -133,7 +142,6 @@ end)
 
 -- ================= Invisible =================
 local InvisibleStore = {}
-
 local function applyInvisible(char)
     if not char or InvisibleStore[char] then return end
     InvisibleStore[char]={}
@@ -150,7 +158,6 @@ local function applyInvisible(char)
         end
     end
 end
-
 local function restoreInvisible(char)
     if not char or not InvisibleStore[char] then return end
     for part,props in pairs(InvisibleStore[char]) do
@@ -160,19 +167,17 @@ local function restoreInvisible(char)
     end
     InvisibleStore[char]=nil
 end
-
 local lastInvisible=false
 RunService.Heartbeat:Connect(function()
     if State.Invisible~=lastInvisible then
         lastInvisible=State.Invisible
-        if State.Invisible then
-            if LocalPlayer.Character then applyInvisible(LocalPlayer.Character) end
-        else
-            if LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
+        if State.Invisible and LocalPlayer.Character then
+            applyInvisible(LocalPlayer.Character)
+        elseif LocalPlayer.Character then
+            restoreInvisible(LocalPlayer.Character)
         end
     end
 end)
-
 LocalPlayer.CharacterAdded:Connect(function(ch)
     if State.Invisible then applyInvisible(ch) end
 end)
@@ -190,7 +195,7 @@ RunService.RenderStepped:Connect(function()
 
     if FOVCircle then
         if State.FOVRainbow then
-            local hue = (tick()%5)/5
+            local hue=(tick()%5)/5
             pcall(function() FOVCircle.Color=Color3.fromHSV(hue,1,1) end)
         end
         pcall(function() FOVCircle.Position=Vector2.new(vw/2,vh/2); FOVCircle.Radius=State.FOVRadius end)
@@ -217,6 +222,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
+    -- Hitbox expand
     if State.Hitbox then
         for _,p in pairs(Players:GetPlayers()) do
             if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -225,7 +231,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Acquire target
+    -- Acquire target for Aimbot / SilentAim
     CurrentTarget=nil
     if State.Aimbot or State.SilentAim then
         local best=State.FOVRadius
@@ -243,33 +249,27 @@ RunService.RenderStepped:Connect(function()
             end
         end
     end
-
-    -- ESP update
-    if State.ESP then
-        for _,p in pairs(Players:GetPlayers()) do
-            if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local box = ESPObjects[p] or newDrawing("Square",{Color=Color3.fromRGB(255,0,0), Thickness=2, Filled=false, Visible=false})
-                ESPObjects[p]=box
-                local sp,onScreen=Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
-                if onScreen then
-                    pcall(function()
-                        box.Position=Vector2.new(sp.X-25,sp.Y-25)
-                        box.Size=Vector2.new(50,50)
-                        box.Visible=true
-                        if State.TargetESP and CurrentTarget then
-                            box.Color=(p==CurrentTarget) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
-                        else
-                            box.Color=Color3.fromRGB(255,0,0)
-                        end
-                    end)
-                else
-                    pcall(function() box.Visible=false end)
-                end
-            end
-        end
-    else
-        for _,box in pairs(ESPObjects) do pcall(function() box.Visible=false end) end
-    end
 end)
 
-print("COCO HUB Loaded | ArrayField UI | Full Features")
+-- ================= Silent Aim Hook (Simple) =================
+local mt=getrawmetatable(game)
+local oldNamecall=mt.__namecall
+local oldIndex=mt.__index
+setreadonly(mt,false)
+mt.__namecall=newcclosure(function(self,...)
+    local method=getnamecallmethod()
+    local args={...}
+    if (tostring(method)=="FireServer") and CurrentTarget and State.SilentAim then
+        if args[2] and typeof(args[2])=="Vector3" then
+            -- Redirect bullet to target part
+            if CurrentTarget.Character and CurrentTarget.Character:FindFirstChild(State.AimbotPart) then
+                args[2]=CurrentTarget.Character[State.AimbotPart].Position
+            end
+            return oldNamecall(self,unpack(args))
+        end
+    end
+    return oldNamecall(self,...)
+end)
+setreadonly(mt,true)
+
+print("COCO HUB Loaded | ArrayField UI | Silent Aim + Rainbow FOV Toggle Fixed")
