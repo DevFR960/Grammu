@@ -1,444 +1,424 @@
--- COCO Never die😈 — Dev/Training GUI (Rayfield loader + fallback)
--- Extended: Purple theme, Delta-friendly UI, visual-only "aim assist" + "silent-aim simulation" (no auto-aim/auto-shoot).
--- Keybind: "Flower" mapped to KeyCode.F and mobile TouchButton labeled 'Flower'.
--- Added: GUI Toggle (hide/show entire GUI) + Aim/Silent toggles (separate). Toggle hotkey: RightShift for GUI.
--- Place as LocalScript in StarterPlayerScripts (use for dev/training only).
+-- COCO HUB | Delta/Xeno/KRNL Compatible (No AutoShoot)
+-- Tries Rayfield (pcall). If fails -> native ScreenGui fallback.
+-- Invisible: tries pastebin (pcall). If fails -> builtin invisible (apply/restore).
+-- Features: Aimbot (lock), SilentAim (lock-only), Fly, Hitbox up to 500, ESP, Rainbow FOV
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local UIS = UserInputService
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
 
--- ======= Config / State =======
-local UIState = {
-    guiVisible = true,
-    espEnabled = false,
-    espStyle = "Billboard",
-    espColor = Color3.fromRGB(180,100,255), -- purple
-    espThickness = 2,
-    espRainbow = false,
-    flyEnabled = false,
-    flySpeed = 120,
-    aimAssist = false, -- visual-only
-    silentSim = false, -- visual-only
-    showPrediction = false,
-    keybindName = "Flower",
-    keybind = Enum.KeyCode.F,
-    guiToggleKey = Enum.KeyCode.RightShift,
-    proFeatures = { hitmarker = true, speedometer = true }
+-- ================= State =================
+local State = {
+    Aimbot=false, SilentAim=false, -- no AutoShoot
+    Hitbox=false, Invisible=false,
+    Fly=false, FlySpeed=40,
+    WalkSpeed=16, JumpPower=50,
+    AimbotPart="Head",
+    FOVRadius=120, FOVRainbow=true,
+    ESP=true, TargetESP=true,
+    HitboxSize=10,
+    GUIVisible=true
 }
 
--- ====== Rayfield Loader (as requested) ======
-local Rayfield
-local RayWindow -- store window reference
-local success, err = pcall(function()
-    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
-
--- ====== Helpers ======
-local function safeClamp(n, a, b) if n < a then return a elseif n > b then return b else return n end end
-local function nextRainbowHue(dt)
-    UIState._hue = (UIState._hue or 0) + dt * 0.6
-    if UIState._hue > 1 then UIState._hue = UIState._hue - math.floor(UIState._hue) end
-    return Color3.fromHSV(UIState._hue, 0.95, 0.95)
-end
-
--- ====== UI Build (Purple theme, Rayfield or fallback) =====
-local GUI = {}
-local function buildFallbackUI()
-    local screen = Instance.new("ScreenGui")
-    screen.Name = "CocoPurpleUI"
-    screen.ResetOnSpawn = false
-    screen.Parent = PlayerGui
-
-    local frame = Instance.new("Frame")
-    frame.Name = "MainFrame"
-    frame.Size = UDim2.new(0, 460, 0, 420)
-    frame.Position = UDim2.new(0, 20, 0, 40)
-    frame.BackgroundColor3 = Color3.fromRGB(28,18,40)
-    frame.BorderSizePixel = 0
-    frame.AnchorPoint = Vector2.new(0,0)
-    frame.Parent = screen
-
-    local title = Instance.new("TextLabel")
-    title.Name = "Title"
-    title.Size = UDim2.new(1, 0, 0, 36)
-    title.BackgroundTransparency = 1
-    title.TextColor3 = Color3.fromRGB(230,200,255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 20
-    title.Text = "COCO Never die😈 — Purple Pro Dev GUI"
-    title.Parent = frame
-
-    -- quick toggles in fallback UI
-    local toggleGuiBtn = Instance.new("TextButton")
-    toggleGuiBtn.Size = UDim2.new(0, 120, 0, 32)
-    toggleGuiBtn.Position = UDim2.new(1, -130, 0, 6)
-    toggleGuiBtn.Text = "Toggle GUI"
-    toggleGuiBtn.BackgroundColor3 = Color3.fromRGB(120,50,200)
-    toggleGuiBtn.TextColor3 = Color3.new(1,1,1)
-    toggleGuiBtn.Parent = frame
-    toggleGuiBtn.MouseButton1Click:Connect(function()
-        UIState.guiVisible = not UIState.guiVisible
-        screen.Enabled = UIState.guiVisible
-    end)
-
-    -- Aim / Silent toggles
-    local aimBtn = Instance.new("TextButton")
-    aimBtn.Size = UDim2.new(0, 140, 0, 32)
-    aimBtn.Position = UDim2.new(0, 10, 0, 60)
-    aimBtn.Text = "AimAssist: OFF"
-    aimBtn.BackgroundColor3 = Color3.fromRGB(100,40,180)
-    aimBtn.TextColor3 = Color3.new(1,1,1)
-    aimBtn.Parent = frame
-    aimBtn.MouseButton1Click:Connect(function()
-        UIState.aimAssist = not UIState.aimAssist
-        aimBtn.Text = UIState.aimAssist and "AimAssist: ON" or "AimAssist: OFF"
-    end)
-
-    local silentBtn = Instance.new("TextButton")
-    silentBtn.Size = UDim2.new(0, 140, 0, 32)
-    silentBtn.Position = UDim2.new(0, 160, 0, 60)
-    silentBtn.Text = "SilentSim: OFF"
-    silentBtn.BackgroundColor3 = Color3.fromRGB(100,40,180)
-    silentBtn.TextColor3 = Color3.new(1,1,1)
-    silentBtn.Parent = frame
-    silentBtn.MouseButton1Click:Connect(function()
-        UIState.silentSim = not UIState.silentSim
-        silentBtn.Text = UIState.silentSim and "SilentSim: ON" or "SilentSim: OFF"
-    end)
-
-    GUI.screen = screen
-    GUI.frame = frame
-    GUI.title = title
-    GUI._fallbackToggleGuiBtn = toggleGuiBtn
-    GUI._fallbackAimBtn = aimBtn
-    GUI._fallbackSilentBtn = silentBtn
-    return GUI
-end
-
-if success and Rayfield then
-    local Window = Rayfield:CreateWindow({ Name = "COCO Never die😈", LoadingTitle = "COCO Never die", SaveConfig = true, ConfigFolder = "COCO_Never_Purple", IntroText = "Dev / Training Tools — Purple Theme" })
-    RayWindow = Window
-    local mainTab = Window:CreateTab("Main")
-    local trainingTab = Window:CreateTab("Training")
-    local miscTab = Window:CreateTab("Misc")
-
-    mainTab:CreateToggle({Name = "ESP (Training targets only)", CurrentValue = UIState.espEnabled, Callback = function(v) UIState.espEnabled = v end})
-    mainTab:CreateDropdown({Name = "ESP Style", Options = {"Billboard","Box","Line+Box"}, CurrentOption = UIState.espStyle, Callback = function(o) UIState.espStyle = o end})
-    mainTab:CreateColorPicker({Name = "ESP Color", Default = {Color = UIState.espColor, Transparency = 0}, Callback = function(c) UIState.espColor = c end})
-    mainTab:CreateToggle({Name = "Rainbow ESP", CurrentValue = UIState.espRainbow, Callback = function(v) UIState.espRainbow = v end})
-    mainTab:CreateSlider({Name = "ESP Thickness", Range = {1,8}, Increment = 1, CurrentValue = UIState.espThickness, Callback = function(v) UIState.espThickness = v end})
-
-    mainTab:CreateToggle({Name = "Fly (local)", CurrentValue = UIState.flyEnabled, Callback = function(v) UIState.flyEnabled = v end})
-    mainTab:CreateSlider({Name = "Fly Speed", Range = {20,400}, Increment = 1, CurrentValue = UIState.flySpeed, Callback = function(v) UIState.flySpeed = v end})
-
-    mainTab:CreateToggle({Name = "Aim Assist (visual-only)", CurrentValue = UIState.aimAssist, Callback = function(v) UIState.aimAssist = v end})
-    mainTab:CreateToggle({Name = "Silent-Aim Simulation (visual-only)", CurrentValue = UIState.silentSim, Callback = function(v) UIState.silentSim = v end})
-
-    -- FOV Circle control (visual-only)
-    mainTab:CreateSlider({Name = "FOV Radius (px)", Range = {50, 600}, Increment = 1, CurrentValue = 150, Callback = function(v) UIState._fovRadius = v end})
-    mainTab:CreateToggle({Name = "FOV Rainbow", CurrentValue = false, Callback = function(v) UIState._fovRainbow = v end})
-
-    trainingTab:CreateButton({Name = "Spawn Pro Targets (10)", Callback = function()
-        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local base = root.Position + root.CFrame.LookVector * 35
-        for i=1,10 do
-            local model = Instance.new("Model")
-            model.Name = "CocoTarget_Pro_"..i
-            local p = Instance.new("Part")
-            p.Name = "HumanoidRootPart"
-            p.Size = Vector3.new(2,2,1)
-            p.Anchored = true
-            p.Position = base + Vector3.new(((i-5)*4), 0, math.sin(i)*6)
-            p.Parent = model
-            model:SetAttribute("COCO_HEALTH", 100)
-            model.Parent = Workspace
+-- ================= Helpers =================
+local function safeRequireLoad(url)
+    local ok, res = pcall(function()
+        local body = game:HttpGet(url)
+        local fn = loadstring(body)
+        if type(fn) == "function" then
+            return fn()
+        else
+            return fn
         end
-        Rayfield:Notify({Title = "Training", Content = "Spawned 10 pro targets.", Duration = 3})
-    end})
+    end)
+    return ok, res
+end
 
-    miscTab:CreateToggle({Name = "Show Speedometer", CurrentValue = UIState.proFeatures.speedometer, Callback = function(v) UIState.proFeatures.speedometer = v end})
+-- Drawing safe create (pcall wrappers)
+local safeDrawing = {}
+do
+    local ok, DrawingLib = pcall(function() return Drawing end)
+    safeDrawing.available = ok and DrawingLib ~= nil
+end
 
-    -- Add quick buttons (Toggle GUI, Toggle Aim, Toggle Silent) as small controls in the window
-    local quickSection = mainTab:CreateSection("Quick Toggles")
-    quickSection:CreateButton({Name = "Toggle GUI (RightShift)", Callback = function()
-        UIState.guiVisible = not UIState.guiVisible
-        -- try to toggle Rayfield window (safe pcall attempts)
-        local ok
-        ok = pcall(function() if RayWindow.Toggle then RayWindow:Toggle() end end)
-        if not ok then pcall(function() if Rayfield.Toggle then Rayfield:Toggle() end end) end
-        -- fallback: set fallback UI screen if present
-        if GUI.screen then GUI.screen.Enabled = UIState.guiVisible end
-    end})
-    quickSection:CreateButton({Name = "Toggle AimAssist (Flower)", Callback = function()
-        UIState.aimAssist = not UIState.aimAssist
-    end})
-    quickSection:CreateButton({Name = "Toggle SilentSim", Callback = function()
-        UIState.silentSim = not UIState.silentSim
-    end})
+local function newDrawing(kind, props)
+    if not safeDrawing.available then return nil end
+    local ok, obj = pcall(function() return Drawing.new(kind) end)
+    if not ok or not obj then return nil end
+    if props then
+        for k,v in pairs(props) do
+            pcall(function() obj[k] = v end)
+        end
+    end
+    return obj
+end
 
-    GUI.Rayfield = Rayfield
-    GUI.Window = RayWindow
+-- ================= Rayfield (pcall) =================
+local Rayfield = nil
+local Window = nil
+local loadedRayfield, rayfieldErr = pcall(function()
+    -- try primary source (as you requested previously)
+    return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+if loadedRayfield then
+    Rayfield = loadedRayfield
+end
+
+if Rayfield and type(Rayfield.CreateWindow) == "function" then
+    Window = Rayfield:CreateWindow({
+        Name = "COCO HUB | Delta Pro Ultimate",
+        LoadingTitle = "COCO HUB Loading",
+        ConfigFolder = "COCO_HUB_Delta"
+    })
 else
-    buildFallbackUI()
+    Rayfield = nil
+    Window = nil
 end
 
--- ====== ESP / Visuals Implementation (safe-only) =====
-UIState.espCache = {}
-local function makeBillboard(part, displayName)
-    local bg = Instance.new("BillboardGui")
-    bg.Name = "CocoESP_BB"
-    bg.Adornee = part
-    bg.Size = UDim2.new(0, 140, 0, 40)
-    bg.AlwaysOnTop = true
-    local label = Instance.new("TextLabel", bg)
-    label.Size = UDim2.new(1,0,1,0)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
-    label.TextColor3 = UIState.espColor
-    label.Text = displayName
-    bg.Parent = part
-    return bg
-end
-local function makeHealthBar(part, model)
-    local hb = Instance.new("BillboardGui")
-    hb.Name = "CocoHealth"
-    hb.Adornee = part
-    hb.Size = UDim2.new(0, 60, 0, 8)
-    hb.AlwaysOnTop = true
-    hb.Parent = part
-    local bg = Instance.new("Frame", hb)
-    bg.Size = UDim2.new(1,0,1,0)
-    bg.BackgroundTransparency = 0.6
-    bg.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    bg.BorderSizePixel = 0
-    local fg = Instance.new("Frame", bg)
-    fg.Name = "Fill"
-    fg.Size = UDim2.new(1,0,1,0)
-    fg.BackgroundColor3 = Color3.fromRGB(160,255,160)
-    fg.BorderSizePixel = 0
-    return hb
-end
-local function clearESP()
-    for part, data in pairs(UIState.espCache) do
-        if data then
-            if data.bb and data.bb.Parent then data.bb:Destroy() end
-            if data.hb and data.hb.Parent then data.hb:Destroy() end
-            UIState.espCache[part] = nil
-        end
-    end
-end
-local function getTrainingParts()
-    local t = {}
-    for _, model in pairs(Workspace:GetChildren()) do
-        if model:IsA("Model") and (model.Name:match("^CocoTarget") or model:GetAttribute("COCO_ESP")) then
-            local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
-            if hrp then table.insert(t, {part = hrp, model = model}) end
-        end
-    end
-    return t
-end
-
--- ====== FOV Circle (UI ring) =====
-local function ensureFOVGui()
-    if GUI._fov and GUI._fov.Parent then return GUI._fov end
+-- ================= Native GUI Fallback =================
+local ScreenGui, Buttons = nil, {}
+local function createNativeGUI()
+    if not LocalPlayer or not LocalPlayer:FindFirstChild("PlayerGui") then return end
+    if ScreenGui then return end
     local sg = Instance.new("ScreenGui")
-    sg.Name = "CocoFOVGui"
+    sg.Name = "COCO_HUB_FallbackGUI"
     sg.ResetOnSpawn = false
-    sg.Parent = PlayerGui
+    sg.Parent = LocalPlayer:FindFirstChild("PlayerGui")
 
-    local outer = Instance.new("Frame")
-    outer.Name = "FOVOuter"
-    local size = UIState._fovRadius or 150
-    outer.Size = UDim2.new(0, size, 0, size)
-    outer.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
-    outer.BackgroundTransparency = 1
-    outer.Parent = sg
-
-    local ring = Instance.new("Frame")
-    ring.Name = "Ring"
-    ring.Size = UDim2.new(1,0,1,0)
-    ring.AnchorPoint = Vector2.new(0.5,0.5)
-    ring.Position = UDim2.new(0.5,0,0.5,0)
-    ring.BackgroundColor3 = Color3.fromRGB(200,120,255)
-    ring.BorderSizePixel = 0
-    ring.Parent = outer
-    local corner = Instance.new("UICorner") corner.CornerRadius = UDim.new(1,0) corner.Parent = ring
-    local inner = Instance.new("Frame") inner.Name = "Inner" inner.Size = UDim2.new(0.84,0,0.84,0) inner.AnchorPoint = Vector2.new(0.5,0.5) inner.Position = UDim2.new(0.5,0,0.5,0) inner.BackgroundColor3 = Color3.fromRGB(28,18,40) inner.BorderSizePixel = 0 inner.Parent = ring
-    local icorner = Instance.new("UICorner") icorner.CornerRadius = UDim.new(1,0); icorner.Parent = inner
-
-    GUI._fov = outer
-    return outer
-end
-
--- ====== Aim Assist & Silent-Sim (visual-only) =====
-UIState._selected = nil
-local function findNearestTrainingTarget()
-    local parts = getTrainingParts()
-    local cam = Workspace.CurrentCamera
-    if not cam then return nil end
-    local cpos = cam.CFrame.Position
-    local nearest, nd = nil, math.huge
-    for _, e in pairs(parts) do
-        local d = (e.part.Position - cpos).Magnitude
-        if d < nd then nd = d; nearest = e end
+    local function CreateButton(text, pos, size)
+        local btn = Instance.new("TextButton")
+        btn.Name = text
+        btn.Text = text
+        btn.Size = size or UDim2.new(0,120,0,36)
+        btn.Position = pos
+        btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+        btn.BorderSizePixel = 0
+        btn.TextColor3 = Color3.fromRGB(255,255,255)
+        btn.Parent = sg
+        return btn
     end
-    return nearest
-end
-local silentDot
-local function updateSilentDot(targetPart)
-    if not targetPart then
-        if silentDot and silentDot.Parent then silentDot.Parent = nil; silentDot = nil end
-        return
-    end
-    if not silentDot then
-        silentDot = Instance.new("Part")
-        silentDot.Name = "CocoSilentDot"
-        silentDot.Anchored = true
-        silentDot.CanCollide = false
-        silentDot.Size = Vector3.new(0.2,0.2,0.2)
-        silentDot.Parent = Workspace
-    end
-    local cam = Workspace.CurrentCamera
-    local dir = (targetPart.Position - cam.CFrame.Position).Unit
-    silentDot.Position = cam.CFrame.Position + dir * safeClamp((cam.CFrame.Position - targetPart.Position).Magnitude/2, 2, 100)
-    silentDot.Transparency = 0
-end
 
--- ====== Keybind (Flower) + Delta touch support =====
-local function setupMobileFlowerButton()
-    if GUI._flowerBtn and GUI._flowerBtn.Parent then return end
-    local sg = GUI.screen or Instance.new("ScreenGui", PlayerGui)
-    sg.Name = sg.Name or "CocoPurpleUI_Mobile"
+    -- stack buttons vertically left side
+    local xOff, yOff = 10, 10
+    local spacing = 46
 
-    local btn = Instance.new("TextButton")
-    btn.Name = "FlowerButton"
-    btn.Text = UIState.keybindName
-    btn.Size = UDim2.new(0, 100, 0, 40)
-    btn.Position = UDim2.new(1, -110, 0.5, -20)
-    btn.BackgroundColor3 = Color3.fromRGB(140,60,200)
-    btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 18
-    btn.AutoButtonColor = true
-    btn.Parent = sg
+    local bFly = CreateButton("Fly", UDim2.new(0, xOff, 0, yOff))
+    yOff = yOff + spacing
+    local bESP = CreateButton("ESP", UDim2.new(0, xOff, 0, yOff))
+    yOff = yOff + spacing
+    local bInv = CreateButton("Invisible", UDim2.new(0, xOff, 0, yOff))
+    yOff = yOff + spacing
+    local bHit = CreateButton("Hitbox", UDim2.new(0, xOff, 0, yOff))
+    yOff = yOff + spacing
+    local bAim = CreateButton("Aimbot", UDim2.new(0, xOff, 0, yOff))
+    yOff = yOff + spacing
+    local bSilent = CreateButton("SilentAim", UDim2.new(0, xOff, 0, yOff))
+    yOff = yOff + spacing
+    local bToggleGUI = CreateButton("HideGUI", UDim2.new(0, xOff, 0, yOff))
 
-    btn.MouseButton1Down:Connect(function()
-        UIState.aimAssist = not UIState.aimAssist
-        btn.BackgroundColor3 = UIState.aimAssist and Color3.fromRGB(200,80,255) or Color3.fromRGB(140,60,200)
+    Buttons = {
+        Fly = bFly,
+        ESP = bESP,
+        Invisible = bInv,
+        Hitbox = bHit,
+        Aimbot = bAim,
+        SilentAim = bSilent,
+        ToggleGUI = bToggleGUI
+    }
+
+    -- click handlers
+    bFly.MouseButton1Click:Connect(function()
+        State.Fly = not State.Fly
+        Buttons.Fly.BackgroundColor3 = State.Fly and Color3.fromRGB(0,190,0) or Color3.fromRGB(40,40,40)
+    end)
+    bESP.MouseButton1Click:Connect(function()
+        State.ESP = not State.ESP
+        Buttons.ESP.BackgroundColor3 = State.ESP and Color3.fromRGB(0,190,0) or Color3.fromRGB(40,40,40)
+    end)
+    bInv.MouseButton1Click:Connect(function()
+        State.Invisible = not State.Invisible
+        Buttons.Invisible.BackgroundColor3 = State.Invisible and Color3.fromRGB(0,190,0) or Color3.fromRGB(40,40,40)
+        -- call invisible toggle handler below via state change
+    end)
+    bHit.MouseButton1Click:Connect(function()
+        State.Hitbox = not State.Hitbox
+        Buttons.Hitbox.BackgroundColor3 = State.Hitbox and Color3.fromRGB(0,190,0) or Color3.fromRGB(40,40,40)
+    end)
+    bAim.MouseButton1Click:Connect(function()
+        State.Aimbot = not State.Aimbot
+        Buttons.Aimbot.BackgroundColor3 = State.Aimbot and Color3.fromRGB(0,190,0) or Color3.fromRGB(40,40,40)
+    end)
+    bSilent.MouseButton1Click:Connect(function()
+        State.SilentAim = not State.SilentAim
+        Buttons.SilentAim.BackgroundColor3 = State.SilentAim and Color3.fromRGB(0,190,0) or Color3.fromRGB(40,40,40)
+    end)
+    bToggleGUI.MouseButton1Click:Connect(function()
+        if sg.Enabled then
+            sg.Enabled = false
+            bToggleGUI.Text = "ShowGUI"
+        else
+            sg.Enabled = true
+            bToggleGUI.Text = "HideGUI"
+        end
     end)
 
-    GUI._flowerBtn = btn
+    ScreenGui = sg
 end
 
-UIS.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == UIState.keybind then
-            UIState.aimAssist = not UIState.aimAssist
-        elseif input.KeyCode == UIState.guiToggleKey then
-            -- Global GUI toggle hotkey
-            UIState.guiVisible = not UIState.guiVisible
-            -- try to toggle Rayfield window safely
-            pcall(function() if RayWindow and RayWindow.Toggle then RayWindow:Toggle() end end)
-            pcall(function() if Rayfield and Rayfield.Toggle then Rayfield:Toggle() end end)
-            if GUI.screen then GUI.screen.Enabled = UIState.guiVisible end
-        end
+-- If Rayfield loaded, build UI using it; otherwise native fallback
+local function buildUI()
+    if Window then
+        -- build Rayfield UI
+        local MainTab = Window:CreateTab("Combat")
+        local MoveTab = Window:CreateTab("Movement")
+        local ESPTab = Window:CreateTab("ESP")
+        local MiscTab = Window:CreateTab("Misc")
+
+        local MainSection = MainTab:CreateSection("Combat")
+        MainSection:CreateToggle({Name="Aimbot (lock)", CurrentValue=false, Callback=function(v) State.Aimbot=v end})
+        MainSection:CreateToggle({Name="Silent Aim (lock)", CurrentValue=false, Callback=function(v) State.SilentAim=v end})
+        MainSection:CreateSlider({Name="Hitbox Size", Range={10,500}, Increment=1, CurrentValue=10, Callback=function(v) State.HitboxSize=v end})
+        MainSection:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption="Head", Callback=function(v) State.AimbotPart=v end})
+        MainSection:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=120, Callback=function(v) State.FOVRadius=v end})
+        MainSection:CreateToggle({Name="Rainbow FOV", CurrentValue=true, Callback=function(v) State.FOVRainbow=v end})
+
+        local MoveSection = MoveTab:CreateSection("Player")
+        MoveSection:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=16, Callback=function(v) State.WalkSpeed=v end})
+        MoveSection:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=50, Callback=function(v) State.JumpPower=v end})
+        MoveSection:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) State.Fly=v end})
+        MoveSection:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=40, Callback=function(v) State.FlySpeed=v end})
+
+        local ESPSection = ESPTab:CreateSection("ESP")
+        ESPSection:CreateToggle({Name="Enable ESP", CurrentValue=true, Callback=function(v) State.ESP=v end})
+        ESPSection:CreateToggle({Name="Target ESP", CurrentValue=true, Callback=function(v) State.TargetESP=v end})
+
+        local MiscSection = MiscTab:CreateSection("Misc")
+        MiscSection:CreateToggle({Name="Invisible (pastebin)", CurrentValue=false, Callback=function(v) State.Invisible=v end})
+
+        -- hotkey to toggle UI
+        UIS.InputBegan:Connect(function(input, gp)
+            if gp then return end
+            if input.KeyCode == Enum.KeyCode.RightShift then
+                Window:Toggle()
+            end
+        end)
+    else
+        -- fallback native GUI
+        createNativeGUI()
     end
-end)
-
--- ====== Fly (local) simplified =====
-local moveVec = Vector3.new(0,0,0)
-local upDown = 0
-UIS.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.W then moveVec = Vector3.new(0,0,-1) end
-    if input.KeyCode == Enum.KeyCode.S then moveVec = Vector3.new(0,0,1) end
-    if input.KeyCode == Enum.KeyCode.A then moveVec = Vector3.new(-1,0,0) end
-    if input.KeyCode == Enum.KeyCode.D then moveVec = Vector3.new(1,0,0) end
-    if input.KeyCode == Enum.KeyCode.Space then upDown = 1 end
-    if input.KeyCode == Enum.KeyCode.LeftControl then upDown = -1 end
-end)
-UIS.InputEnded:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.S then moveVec = Vector3.new(0,0,0) end
-    if input.KeyCode == Enum.KeyCode.A or input.KeyCode == Enum.KeyCode.D then moveVec = Vector3.new(0,0,0) end
-    if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.LeftControl then upDown = 0 end
-end)
-local function enableFlyForChar(chr)
-    if not chr then return end
-    local hrp = chr:FindFirstChild("HumanoidRootPart") if not hrp then return end
-    if not UIState.flyBV then local bv = Instance.new("BodyVelocity") bv.MaxForce = Vector3.new(9e5,9e5,9e5); bv.Velocity = Vector3.new(0,0,0); bv.Parent = hrp; UIState.flyBV = bv end
-    if not UIState.flyGV then local bg = Instance.new("BodyGyro") bg.MaxTorque = Vector3.new(9e5,9e5,9e5); bg.Parent = hrp; UIState.flyGV = bg end
-end
-local function disableFly() if UIState.flyBV then UIState.flyBV:Destroy(); UIState.flyBV=nil end; if UIState.flyGV then UIState.flyGV:Destroy(); UIState.flyGV=nil end end
-
--- ====== Speedometer =====
-local speedLabel
-local function ensureSpeedLabel()
-    if speedLabel and speedLabel.Parent then return end
-    local sg = Instance.new("ScreenGui") sg.Name = "CocoSpeedGui"; sg.ResetOnSpawn = false; sg.Parent = PlayerGui
-    speedLabel = Instance.new("TextLabel") speedLabel.Size = UDim2.new(0,140,0,28); speedLabel.Position = UDim2.new(0.5,-70,0,10); speedLabel.BackgroundTransparency = 0.6; speedLabel.TextColor3 = Color3.fromRGB(255,255,255); speedLabel.Font = Enum.Font.GothamBold; speedLabel.TextSize = 16; speedLabel.Parent = sg
 end
 
--- ====== Main loop =====
-RunService.RenderStepped:Connect(function(dt)
-    local espColorNow = UIState.espRainbow and nextRainbowHue(dt) or UIState.espColor
+-- build ui
+buildUI()
 
-    if (not GUI._flowerBtn) then setupMobileFlowerButton() end
+-- ================= Invisible (pastebin attempt with fallback) =================
+local PASTE_URL = "https://pastebin.com/raw/3Rnd9rHf"
+local InvisibleFn = nil
+local pasteLoaded = false
+do
+    local ok, res = pcall(function()
+        local body = game:HttpGet(PASTE_URL)
+        local fn = loadstring(body)
+        if type(fn) == "function" then
+            return fn
+        end
+        return nil
+    end)
+    if ok and res then
+        InvisibleFn = res
+        pasteLoaded = true
+    end
+end
 
-    -- ESP
-    if UIState.espEnabled and UIState.guiVisible then
-        local list = getTrainingParts()
-        local keep = {}
-        for _, entry in pairs(list) do
-            local p = entry.part
-            keep[p] = true
-            if not UIState.espCache[p] then
-                local data = {}
-                data.bb = makeBillboard(p, entry.model.Name)
-                data.hb = makeHealthBar(p, entry.model)
-                UIState.espCache[p] = data
-            else
-                local d = UIState.espCache[p]
-                if d.bb and d.bb:FindFirstChildWhichIsA("TextLabel") then d.bb:FindFirstChildWhichIsA("TextLabel").TextColor3 = espColorNow end
-                if d.hb and d.hb.Parent then local fill = d.hb:FindFirstChild("Fill", true); if fill then local hp = entry.model:GetAttribute("COCO_HEALTH") or 100; fill.Size = UDim2.new(math.clamp(hp/100,0,1), 0, 1, 0) end end
+local InvisibleStore = {} -- store per-character original props
+
+local function applyInvisibleToCharacter(char)
+    if not char then return end
+    if InvisibleStore[char] then return end
+    InvisibleStore[char] = {}
+    for _, part in pairs(char:GetChildren()) do
+        if part:IsA("BasePart") then
+            InvisibleStore[char][part] = {Transparency = part.Transparency, CanCollide = part.CanCollide}
+            pcall(function() part.Transparency = 1; part.CanCollide = false end)
+        elseif part:IsA("Accessory") then
+            local handle = part:FindFirstChildWhichIsA("BasePart")
+            if handle then
+                InvisibleStore[char][handle] = {Transparency = handle.Transparency, CanCollide = handle.CanCollide}
+                pcall(function() handle.Transparency = 1; handle.CanCollide = false end)
             end
         end
-        for p, data in pairs(UIState.espCache) do if not keep[p] then if data.bb and data.bb.Parent then data.bb:Destroy() end; if data.hb and data.hb.Parent then data.hb:Destroy() end; UIState.espCache[p] = nil end end
-    else
-        clearESP()
     end
+end
 
-    -- FOV
-    if UIState._fovRadius and UIState.guiVisible then
-        local fov = ensureFOVGui()
-        local size = UIState._fovRadius
-        fov.Size = UDim2.new(0, size, 0, size)
-        fov.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
-        local ring = fov:FindFirstChild("Ring")
-        if ring then ring.Size = UDim2.new(1,0,1,0); ring.BackgroundColor3 = UIState._fovRainbow and nextRainbowHue(dt) or espColorNow end
-    else
-        if GUI._fov and GUI._fov.Parent then GUI._fov.Parent = nil; GUI._fov = nil end
+local function restoreInvisibleForCharacter(char)
+    if not char or not InvisibleStore[char] then return end
+    for part, props in pairs(InvisibleStore[char]) do
+        if part and part.Parent then
+            pcall(function() part.Transparency = props.Transparency; part.CanCollide = props.CanCollide end)
+        end
     end
+    InvisibleStore[char] = nil
+end
 
-    -- Aim Assist
-    if UIState.aimAssist and UIState.guiVisible then
-        local nearest = findNearestTrainingTarget()
-        if nearest then
-            local vel = nearest.part.Velocity or Vector3.new()
-            local cam = Workspace.CurrentCamera
-            local dist = (nearest.part.Position - cam.CFrame.Position).Magnitude
-            local speed = 200
-            local ttime = dist / math.max(speed, 1)
-            local predicted = nearest.part.Position + vel * ttime
-            if not UIState._predMarker then local marker = Instance.new("Part") marker.Name = "CocoPredMarker"; marker.Anchored = true; marker.Size = Vector3.new(0.4,0.4,0.4); marker.CanCollide = false; marker.Parent = Workspace; UIState._predMarker = marker end
-            UIState._predMarker.Position = predicted; UIState._predMarker.Transparency = 0
+-- apply/restore handlers when State.Invisible toggles
+local lastInvisibleState = false
+RunService.Heartbeat:Connect(function()
+    if State.Invisible ~= lastInvisibleState then
+        lastInvisibleState = State.Invisible
+        -- if paste function exists and loaded, try to call it when turning on
+        if State.Invisible and pasteLoaded and InvisibleFn then
+            pcall(function() InvisibleFn() end)
+        end
+
+        -- fallback apply/restore
+        if State.Invisible then
+            if LocalPlayer.Character then applyInvisibleToCharacter(LocalPlayer.Character) end
         else
-            if UIState._predMa
+            if LocalPlayer.Character then restoreInvisibleForCharacter(LocalPlayer.Character) end
+        end
+    end
+end)
+
+-- ensure respawn handling
+LocalPlayer.CharacterAdded:Connect(function(ch)
+    -- restore/ reapply depending on state
+    if State.Invisible then
+        if pasteLoaded and InvisibleFn then
+            pcall(function() InvisibleFn() end)
+        end
+        applyInvisibleToCharacter(ch)
+    else
+        -- nothing by default
+    end
+end)
+
+-- ================= ESP + FOV + Targeting =================
+local ESPObjects = {}
+local FOVCircle = nil
+if safeDrawing.available then
+    FOVCircle = newDrawing("Circle", {Color = Color3.fromRGB(0,255,255), Thickness = 2, Filled = false, Visible = true, Radius = State.FOVRadius})
+end
+
+local function CreateESP(p)
+    if ESPObjects[p] then return ESPObjects[p] end
+    local box = newDrawing("Square", {Color = Color3.fromRGB(255,0,0), Thickness = 2, Filled = false, Visible = false})
+    ESPObjects[p] = box
+    return box
+end
+
+local CurrentTarget = nil
+
+RunService.RenderStepped:Connect(function()
+    -- viewport size
+    local vw, vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
+
+    -- update FOV circle
+    if FOVCircle then
+        if State.FOVRainbow then
+            local hue = (tick() % 5) / 5
+            pcall(function() FOVCircle.Color = Color3.fromHSV(hue,1,1) end)
+        end
+        pcall(function() FOVCircle.Position = Vector2.new(vw/2, vh/2); FOVCircle.Radius = State.FOVRadius end)
+    end
+
+    -- local character updates: WalkSpeed, JumpPower, Fly
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrp = char.HumanoidRootPart
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end)
+        end
+
+        if State.Fly then
+            local camCF = Camera.CFrame
+            local moveDir = Vector3.new()
+            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+            if moveDir.Magnitude > 0 then
+                pcall(function() hrp.Velocity = moveDir.Unit * State.FlySpeed end)
+            else
+                pcall(function() hrp.Velocity = Vector3.new(0,0,0) end)
+            end
+        end
+    end
+
+    -- Hitbox apply
+    if State.Hitbox then
+        for _,p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                pcall(function() p.Character.HumanoidRootPart.Size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize) end)
+            end
+        end
+    end
+
+    -- Acquire target for Aimbot/SilentAim
+    CurrentTarget = nil
+    if State.Aimbot or State.SilentAim then
+        local best = State.FOVRadius
+        for _,p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(State.AimbotPart) then
+                local pos3 = p.Character[State.AimbotPart].Position
+                local sp, onScreen = Camera:WorldToViewportPoint(pos3)
+                if onScreen then
+                    local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(vw/2, vh/2)).Magnitude
+                    if d < best then
+                        best = d
+                        CurrentTarget = p
+                    end
+                end
+            end
+        end
+    end
+
+    -- ESP update
+    if State.ESP then
+        for _,p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local box = CreateESP(p)
+                local sp, onScreen = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                if onScreen then
+                    pcall(function()
+                        box.Position = Vector2.new(sp.X - 25, sp.Y - 25)
+                        box.Size = Vector2.new(50, 50)
+                        box.Visible = true
+                        if State.TargetESP and CurrentTarget then
+                            box.Color = (p == CurrentTarget) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
+                        else
+                            box.Color = Color3.fromRGB(255,0,0)
+                        end
+                    end)
+                else
+                    pcall(function() box.Visible = false end)
+                end
+            end
+        end
+    else
+        for _,box in pairs(ESPObjects) do pcall(function() box.Visible = false end) end
+    end
+end)
+
+-- Cleanup on unload (best-effort)
+local function cleanup()
+    pcall(function()
+        for _,box in pairs(ESPObjects) do if box and safeDrawing.available then box:Remove() end end
+        if FOVCircle and safeDrawing.available then pcall(function() FOVCircle:Remove() end) end
+        if LocalPlayer.Character then restoreInvisibleForCharacter(LocalPlayer.Character) end
+        if ScreenGui then pcall(function() ScreenGui:Destroy() end) end
+    end)
+end
+
+-- try to detect script unload (some executors fire this)
+if syn and syn.disconnect_gui then
+    -- nothing
+end
+
+-- print ready
+pcall(function() print("COCO HUB loaded (compatible build). UI: " .. (Window and "Rayfield" or "Native")) end)
+
+-- end of script
