@@ -40,10 +40,11 @@ end
 -- ================= ArrayField UI =================
 local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
 local Window = ArrayField:CreateWindow({
-    Name = "COCO HUB | Delta Pro Ultimate",
-    Size = Vector2.new(400,500),
-    KeySystem = false
-})
+        Name = "COCO HUB | Delta Pro Ultimate",
+        LoadingTitle = "COCO HUB Loading",
+        ConfigurationSaving = {Enabled=true, FileName="COCO_HUB_Delta"},
+        KeySystem=false
+    })
 
 -- Tabs
 local CombatTab = Window:CreateTab("Combat")
@@ -51,122 +52,78 @@ local MoveTab = Window:CreateTab("Movement")
 local ESPTab = Window:CreateTab("ESP")
 local MiscTab = Window:CreateTab("Misc")
 
--- ================= Combat =================
-local CombatSection = CombatTab:CreateSection("Combat Features", false)
-
-CombatSection:CreateToggle({
-    Name = "Aimbot",
-    CurrentValue = State.Aimbot,
-    Flag = "AimbotToggle",
-    Callback = function(v) State.Aimbot=v end
+-- Combat Section
+local CombatSection = CombatTab:CreateSection("Combat Features",false)
+local AimbotToggle = CombatTab:CreateToggle({
+    Name="Aimbot", SectionParent=CombatSection, CurrentValue=false,
+    Callback=function(v) State.Aimbot=v end
+})
+local SilentAimToggle = CombatTab:CreateToggle({
+    Name="SilentAim", SectionParent=CombatSection, CurrentValue=false,
+    Callback=function(v) State.SilentAim=v end
+})
+local HitboxSlider = CombatTab:CreateSlider({
+    Name="Hitbox Size", SectionParent=CombatSection,
+    Range={10,500}, Increment=1, CurrentValue=State.HitboxSize,
+    Callback=function(v) State.HitboxSize=v end
+})
+local AimbotPartDropdown = CombatTab:CreateDropdown({
+    Name="Aimbot Part", SectionParent=CombatSection,
+    Options={"Head","HumanoidRootPart"}, CurrentOption=State.AimbotPart,
+    MultiSelection=false,
+    Callback=function(v) State.AimbotPart=v end
+})
+local FOVSlider = CombatTab:CreateSlider({
+    Name="FOV Radius", SectionParent=CombatSection,
+    Range={50,1000}, Increment=1, CurrentValue=State.FOVRadius,
+    Callback=function(v) State.FOVRadius=v end
+})
+local RainbowFOVToggle = CombatTab:CreateToggle({
+    Name="Rainbow FOV", SectionParent=CombatSection, CurrentValue=true,
+    Callback=function(v) State.FOVRainbow=v end
 })
 
-CombatSection:CreateToggle({
-    Name = "Silent Aim",
-    CurrentValue = State.SilentAim,
-    Flag = "SilentAimToggle",
-    Callback = function(v) State.SilentAim=v end
+-- Movement Section
+local MoveSection = MoveTab:CreateSection("Movement Features",false)
+local WalkSpeedSlider = MoveTab:CreateSlider({
+    Name="WalkSpeed", SectionParent=MoveSection,
+    Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed,
+    Callback=function(v) State.WalkSpeed=v end
+})
+local JumpPowerSlider = MoveTab:CreateSlider({
+    Name="JumpPower", SectionParent=MoveSection,
+    Range={50,300}, Increment=1, CurrentValue=State.JumpPower,
+    Callback=function(v) State.JumpPower=v end
+})
+local FlyToggle = MoveTab:CreateToggle({
+    Name="Fly", SectionParent=MoveSection, CurrentValue=false,
+    Callback=function(v) State.Fly=v end
+})
+local FlySpeedSlider = MoveTab:CreateSlider({
+    Name="Fly Speed", SectionParent=MoveSection,
+    Range={10,200}, Increment=1, CurrentValue=State.FlySpeed,
+    Callback=function(v) State.FlySpeed=v end
 })
 
-CombatSection:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {10,500},
-    Increment = 1,
-    CurrentValue = State.HitboxSize,
-    Flag = "HitboxSlider",
-    Callback = function(v) State.HitboxSize=v end
+-- ESP Section
+local ESPSection = ESPTab:CreateSection("ESP Features",false)
+local ESPEnableToggle = ESPTab:CreateToggle({
+    Name="Enable ESP", SectionParent=ESPSection, CurrentValue=true,
+    Callback=function(v) State.ESP=v end
+})
+local TargetESPToggle = ESPTab:CreateToggle({
+    Name="Target ESP", SectionParent=ESPSection, CurrentValue=true,
+    Callback=function(v) State.TargetESP=v end
 })
 
-CombatSection:CreateDropdown({
-    Name = "Aimbot Part",
-    Options = {"Head","HumanoidRootPart"},
-    CurrentOption = State.AimbotPart,
-    MultiSelection = false,
-    Flag = "AimbotPartDropdown",
-    Callback = function(v) State.AimbotPart=v end
+-- Misc Section
+local MiscSection = MiscTab:CreateSection("Misc Features",false)
+local InvisibleToggle = MiscTab:CreateToggle({
+    Name="Invisible", SectionParent=MiscSection, CurrentValue=false,
+    Callback=function(v) State.Invisible=v end
 })
 
-CombatSection:CreateSlider({
-    Name = "FOV Radius",
-    Range = {50,1000},
-    Increment = 1,
-    CurrentValue = State.FOVRadius,
-    Flag = "FOVRadiusSlider",
-    Callback = function(v) State.FOVRadius=v end
-})
-
-CombatSection:CreateToggle({
-    Name = "Rainbow FOV",
-    CurrentValue = State.FOVRainbow,
-    Flag = "RainbowFOVToggle",
-    Callback = function(v) State.FOVRainbow=v end
-})
-
--- ================= Movement =================
-local MoveSection = MoveTab:CreateSection("Movement Features", false)
-
-MoveSection:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16,200},
-    Increment = 1,
-    CurrentValue = State.WalkSpeed,
-    Flag = "WalkSpeedSlider",
-    Callback = function(v) State.WalkSpeed=v end
-})
-
-MoveSection:CreateSlider({
-    Name = "JumpPower",
-    Range = {50,300},
-    Increment = 1,
-    CurrentValue = State.JumpPower,
-    Flag = "JumpPowerSlider",
-    Callback = function(v) State.JumpPower=v end
-})
-
-MoveSection:CreateToggle({
-    Name = "Fly",
-    CurrentValue = State.Fly,
-    Flag = "FlyToggle",
-    Callback = function(v) State.Fly=v end
-})
-
-MoveSection:CreateSlider({
-    Name = "Fly Speed",
-    Range = {10,200},
-    Increment = 1,
-    CurrentValue = State.FlySpeed,
-    Flag = "FlySpeedSlider",
-    Callback = function(v) State.FlySpeed=v end
-})
-
--- ================= ESP =================
-local ESPSection = ESPTab:CreateSection("ESP Features", false)
-
-ESPSection:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = State.ESP,
-    Flag = "ESPEnableToggle",
-    Callback = function(v) State.ESP=v end
-})
-
-ESPSection:CreateToggle({
-    Name = "Target ESP",
-    CurrentValue = State.TargetESP,
-    Flag = "TargetESPToggle",
-    Callback = function(v) State.TargetESP=v end
-})
-
--- ================= Misc =================
-local MiscSection = MiscTab:CreateSection("Misc Features", false)
-
-MiscSection:CreateToggle({
-    Name = "Invisible",
-    CurrentValue = State.Invisible,
-    Flag = "InvisibleToggle",
-    Callback = function(v) State.Invisible=v end
-})
-
--- ================= Hotkey toggle GUI =================
+-- Hotkey toggle GUI
 UIS.InputBegan:Connect(function(input,gp)
     if gp then return end
     if input.KeyCode==Enum.KeyCode.RightShift then
@@ -174,7 +131,7 @@ UIS.InputBegan:Connect(function(input,gp)
     end
 end)
 
--- ================= Invisible System =================
+-- ================= Invisible =================
 local InvisibleStore = {}
 
 local function applyInvisible(char)
@@ -203,6 +160,18 @@ local function restoreInvisible(char)
     end
     InvisibleStore[char]=nil
 end
+
+local lastInvisible=false
+RunService.Heartbeat:Connect(function()
+    if State.Invisible~=lastInvisible then
+        lastInvisible=State.Invisible
+        if State.Invisible then
+            if LocalPlayer.Character then applyInvisible(LocalPlayer.Character) end
+        else
+            if LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
+        end
+    end
+end)
 
 LocalPlayer.CharacterAdded:Connect(function(ch)
     if State.Invisible then applyInvisible(ch) end
