@@ -1,5 +1,5 @@
--- COCO HUB | Delta/Xeno/KRNL Compatible (No AutoShoot)
--- All-in-One Rayfield UI | GitHub Invisible
+-- COCO HUB | Delta/Xeno/KRNL Compatible (All-in-One Rayfield UI)
+-- Invisible via GitHub
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -48,49 +48,51 @@ end
 
 -- ================= Rayfield UI =================
 local Rayfield = safeLoadstring("https://sirius.menu/rayfield")
-local Window = nil
-if Rayfield and type(Rayfield.CreateWindow)=="function" then
-    Window = Rayfield:CreateWindow({
-        Name="COCO HUB | Delta Pro Ultimate",
-        LoadingTitle="COCO HUB Loading",
-        ConfigFolder="COCO_HUB_Delta"
-    })
+if not Rayfield or type(Rayfield.CreateWindow)~="function" then
+    return warn("Rayfield failed to load")
 end
 
+local Window = Rayfield:CreateWindow({
+    Name="COCO HUB | Delta Pro Ultimate",
+    LoadingTitle="COCO HUB Loading",
+    ConfigFolder="COCO_HUB_Delta"
+})
+Window:Show()
+
 -- ================= Build UI =================
-if Window then
+local function buildUI()
     -- Tabs
     local MainTab = Window:CreateTab("Combat")
     local MoveTab = Window:CreateTab("Movement")
     local ESPTab = Window:CreateTab("ESP")
     local MiscTab = Window:CreateTab("Misc")
 
-    -- Combat
-    local MainSection = MainTab:CreateSection("Combat")
-    MainSection:CreateToggle({Name="Aimbot", CurrentValue=false, Callback=function(v) State.Aimbot=v end})
-    MainSection:CreateToggle({Name="Silent Aim", CurrentValue=false, Callback=function(v) State.SilentAim=v end})
-    MainSection:CreateSlider({Name="Hitbox Size", Range={10,500}, Increment=1, CurrentValue=10, Callback=function(v) State.HitboxSize=v end})
-    MainSection:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption="Head", Callback=function(v) State.AimbotPart=v end})
-    MainSection:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=120, Callback=function(v) State.FOVRadius=v end})
-    MainSection:CreateToggle({Name="Rainbow FOV", CurrentValue=true, Callback=function(v) State.FOVRainbow=v end})
+    -- Combat Section
+    local CombatSection = MainTab:CreateSection("Combat")
+    CombatSection:CreateToggle({Name="Aimbot", CurrentValue=false, Callback=function(v) State.Aimbot=v end})
+    CombatSection:CreateToggle({Name="Silent Aim", CurrentValue=false, Callback=function(v) State.SilentAim=v end})
+    CombatSection:CreateSlider({Name="Hitbox Size", Range={10,500}, Increment=1, CurrentValue=10, Callback=function(v) State.HitboxSize=v end})
+    CombatSection:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption="Head", Callback=function(v) State.AimbotPart=v end})
+    CombatSection:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=120, Callback=function(v) State.FOVRadius=v end})
+    CombatSection:CreateToggle({Name="Rainbow FOV", CurrentValue=true, Callback=function(v) State.FOVRainbow=v end})
 
-    -- Movement
+    -- Movement Section
     local MoveSection = MoveTab:CreateSection("Player")
     MoveSection:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=16, Callback=function(v) State.WalkSpeed=v end})
     MoveSection:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=50, Callback=function(v) State.JumpPower=v end})
     MoveSection:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) State.Fly=v end})
     MoveSection:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=40, Callback=function(v) State.FlySpeed=v end})
 
-    -- ESP
+    -- ESP Section
     local ESPSection = ESPTab:CreateSection("ESP")
     ESPSection:CreateToggle({Name="Enable ESP", CurrentValue=true, Callback=function(v) State.ESP=v end})
     ESPSection:CreateToggle({Name="Target ESP", CurrentValue=true, Callback=function(v) State.TargetESP=v end})
 
-    -- Misc
+    -- Misc Section
     local MiscSection = MiscTab:CreateSection("Misc")
     MiscSection:CreateToggle({Name="Invisible (GitHub)", CurrentValue=false, Callback=function(v) State.Invisible=v end})
 
-    -- Hotkey toggle UI
+    -- Hotkey: toggle UI
     UIS.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode==Enum.KeyCode.RightShift then
@@ -99,13 +101,14 @@ if Window then
     end)
 end
 
+buildUI()
+
 -- ================= Invisible =================
 local InvisibleFn = safeLoadstring("https://raw.githubusercontent.com/DevFR960/Grammu/refs/heads/main/Grammu")
 local InvisibleStore = {}
 
 local function applyInvisible(char)
-    if not char then return end
-    if InvisibleStore[char] then return end
+    if not char or InvisibleStore[char] then return end
     InvisibleStore[char] = {}
     for _, part in pairs(char:GetChildren()) do
         if part:IsA("BasePart") then
@@ -128,7 +131,7 @@ local function restoreInvisible(char)
             pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end)
         end
     end
-    InvisibleStore[char]=nil
+    InvisibleStore[char] = nil
 end
 
 local lastInvisible=false
@@ -253,4 +256,3 @@ RunService.RenderStepped:Connect(function()
 end)
 
 print("COCO HUB Loaded | Rayfield UI | GitHub Invisible")
-
