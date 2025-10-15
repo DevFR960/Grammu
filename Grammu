@@ -9,80 +9,73 @@ local Workspace = game:GetService("Workspace")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- ================= State (defaults: everything combat/esp OFF) =================
+-- ================= State =================
 local State = {
     -- Combat / Aim
-    Aimbot = false,
-    SilentAim = false,
-    AimbotPart = "Head", -- "Head" or "HumanoidRootPart"
-    FOVRadius = 120,
-    FOVRainbow = false,
-
+    Aimbot=false,
+    SilentAim=false,
+    AimbotPart="Head",
+    FOVRadius=120,
+    FOVRainbow=false,
     -- ESP / Hitbox
-    ESP = false,
-    TargetESP = false,
-    ESPColor = Color3.fromRGB(255,0,0),
-    Hitbox = false,
-    HitboxSize = 10,
-    HitboxColor = Color3.fromRGB(0,255,0),
-
-    -- Movement (preserved; not modified)
-    WalkSpeed = 16,
-    JumpPower = 50,
-    Fly = false,
-    FlySpeed = 40,
-
+    ESP=false,
+    TargetESP=false,
+    ESPColor=Color3.fromRGB(255,0,0),
+    Hitbox=false,
+    HitboxSize=10,
+    HitboxColor=Color3.fromRGB(0,255,0),
+    -- Movement
+    WalkSpeed=16,
+    JumpPower=50,
+    Fly=false,
+    FlySpeed=40,
+    NoClip=false,
     -- Misc
-    Invisible = false,
+    Invisible=false
 }
 
 -- ================= Helpers =================
-local safeDrawing = {}
+local safeDrawing={}
 do
-    local ok, DrawingLib = pcall(function() return Drawing end)
-    safeDrawing.available = ok and DrawingLib ~= nil
+    local ok,DrawingLib=pcall(function() return Drawing end)
+    safeDrawing.available=ok and DrawingLib~=nil
 end
 
-local function newDrawing(kind, props)
+local function newDrawing(kind,props)
     if not safeDrawing.available then return nil end
-    local ok, obj = pcall(function() return Drawing.new(kind) end)
+    local ok,obj=pcall(function() return Drawing.new(kind) end)
     if not ok or not obj then return nil end
     if props then
-        for k,v in pairs(props) do
-            pcall(function() obj[k] = v end)
-        end
+        for k,v in pairs(props) do pcall(function() obj[k]=v end) end
     end
     return obj
 end
 
--- ================= Keep track original HRP sizes to restore after Hitbox toggle off =================
-local OriginalHitboxes = {} -- [player] = Vector3
+-- ================= Hitbox original storage =================
+local OriginalHitboxes={}
 local function storeOriginalHitbox(plr)
     if not plr or not plr.Character then return end
-    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+    local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
     if hrp and not OriginalHitboxes[plr] then
-        OriginalHitboxes[plr] = Vector3.new(hrp.Size.X, hrp.Size.Y, hrp.Size.Z)
+        OriginalHitboxes[plr]=hrp.Size
     end
 end
 local function restoreOriginalHitbox(plr)
     if not plr or not plr.Character then return end
-    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+    local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
     if hrp and OriginalHitboxes[plr] then
-        pcall(function()
-            hrp.Size = OriginalHitboxes[plr]
-            hrp.CanCollide = false
-        end)
-        OriginalHitboxes[plr] = nil
+        pcall(function() hrp.Size=OriginalHitboxes[plr]; hrp.CanCollide=false end)
+        OriginalHitboxes[plr]=nil
     end
 end
 
 -- ================= ArrayField UI =================
 local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
 local Window = ArrayField:CreateWindow({
-    Name = "COCO HUB | Delta Pro Ultimate",
-    LoadingTitle = "COCO HUB Loading",
-    ConfigurationSaving = { Enabled = true, FileName = "COCO_HUB_Delta" },
-    KeySystem = false
+    Name="COCO HUB | Delta Pro Ultimate",
+    LoadingTitle="COCO HUB Loading",
+    ConfigurationSaving={Enabled=true,FileName="COCO_HUB_Delta"},
+    KeySystem=false
 })
 
 -- Tabs
@@ -91,267 +84,99 @@ local MoveTab = Window:CreateTab("Movement")
 local ESPTab = Window:CreateTab("ESP")
 local MiscTab = Window:CreateTab("Misc")
 
--- ================= UI Elements (use State values so toggles start OFF) =================
-
+-- ================= UI Elements =================
 -- Combat
-local AimbotToggle = CombatTab:CreateToggle({
-    Name = "Aimbot",
-    CurrentValue = State.Aimbot,
-    Flag = "AimbotToggle",
-    Callback = function(v) State.Aimbot = v end
-})
+local AimbotToggle = CombatTab:CreateToggle({Name="Aimbot",CurrentValue=State.Aimbot,Callback=function(v) State.Aimbot=v end})
+local SilentAimToggle = CombatTab:CreateToggle({Name="Silent Aim",CurrentValue=State.SilentAim,Callback=function(v) State.SilentAim=v end})
+local AimbotPartDropdown = CombatTab:CreateDropdown({Name="Aimbot Part",Options={"Head","HumanoidRootPart"},CurrentOption=State.AimbotPart,MultiSelection=false,Callback=function(v) State.AimbotPart=v end})
+local FOVSlider = CombatTab:CreateSlider({Name="FOV Radius",Range={50,1000},Increment=1,CurrentValue=State.FOVRadius,Callback=function(v) State.FOVRadius=v end})
+local RainbowFOVToggle = CombatTab:CreateToggle({Name="Rainbow FOV",CurrentValue=State.FOVRainbow,Callback=function(v) State.FOVRainbow=v end})
+local HitboxToggle = CombatTab:CreateToggle({Name="Hitbox Expand",CurrentValue=State.Hitbox,Callback=function(v) State.Hitbox=v end})
+local HitboxSizeSlider = CombatTab:CreateSlider({Name="Hitbox Size",Range={10,500},Increment=1,CurrentValue=State.HitboxSize,Callback=function(v) State.HitboxSize=v end})
+local HitboxColorPicker = CombatTab:CreateColorPicker({Name="Hitbox Color",Color=State.HitboxColor,Callback=function(v) State.HitboxColor=v end})
 
-local SilentAimToggle = CombatTab:CreateToggle({
-    Name = "Silent Aim",
-    CurrentValue = State.SilentAim,
-    Flag = "SilentAimToggle",
-    Callback = function(v) State.SilentAim = v end
-})
-
-local AimbotPartDropdown = CombatTab:CreateDropdown({
-    Name = "Aimbot Part",
-    Options = {"Head","HumanoidRootPart"},
-    CurrentOption = State.AimbotPart,
-    MultiSelection = false,
-    Flag = "AimbotPartDropdown",
-    Callback = function(v) State.AimbotPart = v end
-})
-
-local FOVSlider = CombatTab:CreateSlider({
-    Name = "FOV Radius",
-    Range = {50,1000},
-    Increment = 1,
-    CurrentValue = State.FOVRadius,
-    Flag = "FOVRadiusSlider",
-    Callback = function(v) State.FOVRadius = v end
-})
-
-local RainbowFOVToggle = CombatTab:CreateToggle({
-    Name = "Rainbow FOV",
-    CurrentValue = State.FOVRainbow,
-    Flag = "RainbowFOVToggle",
-    Callback = function(v) State.FOVRainbow = v end
-})
-
-local HitboxToggle = CombatTab:CreateToggle({
-    Name = "Hitbox Expand",
-    CurrentValue = State.Hitbox,
-    Flag = "HitboxToggle",
-    Callback = function(v)
-        State.Hitbox = v
-        if v then
-            -- store current HRP sizes for all players (except local)
-            for _,plr in pairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer then
-                    storeOriginalHitbox(plr)
-                end
-            end
-        else
-            -- restore when turned off
-            for _,plr in pairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer then
-                    restoreOriginalHitbox(plr)
-                end
-            end
-        end
-    end
-})
-
-local HitboxSizeSlider = CombatTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {10,500},
-    Increment = 1,
-    CurrentValue = State.HitboxSize,
-    Flag = "HitboxSizeSlider",
-    Callback = function(v) State.HitboxSize = v end
-})
-
-local HitboxColorPicker = CombatTab:CreateColorPicker({
-    Name = "Hitbox Color",
-    Color = State.HitboxColor,
-    Flag = "HitboxColor",
-    Callback = function(v) State.HitboxColor = v end
-})
-
--- Movement (preserved - kept as requested)
-MoveTab:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16,200},
-    Increment = 1,
-    CurrentValue = State.WalkSpeed,
-    Flag = "WalkSpeedSlider",
-    Callback = function(v) State.WalkSpeed = v end
-})
-MoveTab:CreateSlider({
-    Name = "JumpPower",
-    Range = {50,300},
-    Increment = 1,
-    CurrentValue = State.JumpPower,
-    Flag = "JumpPowerSlider",
-    Callback = function(v) State.JumpPower = v end
-})
-MoveTab:CreateToggle({
-    Name = "Fly",
-    CurrentValue = State.Fly,
-    Flag = "FlyToggle",
-    Callback = function(v) State.Fly = v end
-})
-MoveTab:CreateSlider({
-    Name = "Fly Speed",
-    Range = {10,200},
-    Increment = 1,
-    CurrentValue = State.FlySpeed,
-    Flag = "FlySpeedSlider",
-    Callback = function(v) State.FlySpeed = v end
-})
+-- Movement
+MoveTab:CreateSlider({Name="WalkSpeed",Range={16,200},Increment=1,CurrentValue=State.WalkSpeed,Callback=function(v) State.WalkSpeed=v end})
+MoveTab:CreateSlider({Name="JumpPower",Range={50,300},Increment=1,CurrentValue=State.JumpPower,Callback=function(v) State.JumpPower=v end})
+MoveTab:CreateToggle({Name="Fly",CurrentValue=State.Fly,Callback=function(v) State.Fly=v end})
+MoveTab:CreateSlider({Name="Fly Speed",Range={10,200},Increment=1,CurrentValue=State.FlySpeed,Callback=function(v) State.FlySpeed=v end})
+MoveTab:CreateToggle({Name="NoClip",CurrentValue=State.NoClip,Callback=function(v) State.NoClip=v end})
 
 -- ESP / Misc
-local ESPEnableToggle = ESPTab:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = State.ESP,
-    Flag = "ESPEnableToggle",
-    Callback = function(v) State.ESP = v end
-})
-local TargetESPToggle = ESPTab:CreateToggle({
-    Name = "Target ESP",
-    CurrentValue = State.TargetESP,
-    Flag = "TargetESPToggle",
-    Callback = function(v) State.TargetESP = v end
-})
-local ESPColorPicker = ESPTab:CreateColorPicker({
-    Name = "ESP Color",
-    Color = State.ESPColor,
-    Flag = "ESPColor",
-    Callback = function(v) State.ESPColor = v end
-})
-
-local InvisibleToggle = MiscTab:CreateToggle({
-    Name = "Invisible",
-    CurrentValue = State.Invisible,
-    Flag = "InvisibleToggle",
-    Callback = function(v) State.Invisible = v end
-})
+local ESPEnableToggle = ESPTab:CreateToggle({Name="Enable ESP",CurrentValue=State.ESP,Callback=function(v) State.ESP=v end})
+local TargetESPToggle = ESPTab:CreateToggle({Name="Target ESP",CurrentValue=State.TargetESP,Callback=function(v) State.TargetESP=v end})
+local ESPColorPicker = ESPTab:CreateColorPicker({Name="ESP Color",Color=State.ESPColor,Callback=function(v) State.ESPColor=v end})
+local InvisibleToggle = MiscTab:CreateToggle({Name="Invisible",CurrentValue=State.Invisible,Callback=function(v) State.Invisible=v end})
 
 -- GUI Hotkey
-UIS.InputBegan:Connect(function(input, gp)
+UIS.InputBegan:Connect(function(input,gp)
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        Window:Toggle()
-    end
+    if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end
 end)
 
--- ================= Movement implementation (preserved) =================
-do
-    local function applyMovement()
-        local char = LocalPlayer.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            pcall(function()
-                hum.WalkSpeed = State.WalkSpeed
-                hum.JumpPower = State.JumpPower
-            end)
-        end
-        if State.Fly and hrp then
-            local camCF = Camera.CFrame
-            local moveDir = Vector3.new()
-            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-            if moveDir.Magnitude > 0 then
-                pcall(function() hrp.Velocity = moveDir.Unit * State.FlySpeed end)
-            else
-                pcall(function() hrp.Velocity = Vector3.new(0,0,0) end)
-            end
-        end
-    end
-    RunService.RenderStepped:Connect(applyMovement)
-end
-
--- ================= Invisible System =================
-local InvisibleStore = {}
+-- ================= Invisible =================
+local InvisibleStore={}
 local function applyInvisible(char)
     if not char or InvisibleStore[char] then return end
-    InvisibleStore[char] = {}
-    for _, part in pairs(char:GetChildren()) do
+    InvisibleStore[char]={}
+    for _,part in pairs(char:GetChildren()) do
         if part:IsA("BasePart") then
-            InvisibleStore[char][part] = { Transparency = part.Transparency, CanCollide = part.CanCollide }
-            pcall(function() part.Transparency = 1; part.CanCollide = false end)
+            InvisibleStore[char][part]={Transparency=part.Transparency,CanCollide=part.CanCollide}
+            pcall(function() part.Transparency=1; part.CanCollide=false end)
         elseif part:IsA("Accessory") then
-            local handle = part:FindFirstChildWhichIsA("BasePart")
+            local handle=part:FindFirstChildWhichIsA("BasePart")
             if handle then
-                InvisibleStore[char][handle] = { Transparency = handle.Transparency, CanCollide = handle.CanCollide }
-                pcall(function() handle.Transparency = 1; handle.CanCollide = false end)
+                InvisibleStore[char][handle]={Transparency=handle.Transparency,CanCollide=handle.CanCollide}
+                pcall(function() handle.Transparency=1; handle.CanCollide=false end)
             end
         end
     end
 end
 local function restoreInvisible(char)
     if not char or not InvisibleStore[char] then return end
-    for part, props in pairs(InvisibleStore[char]) do
+    for part,props in pairs(InvisibleStore[char]) do
         if part and part.Parent then
-            pcall(function() part.Transparency = props.Transparency; part.CanCollide = props.CanCollide end)
+            pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end)
         end
     end
-    InvisibleStore[char] = nil
+    InvisibleStore[char]=nil
 end
-
-local lastInvisible = false
 RunService.Heartbeat:Connect(function()
-    if State.Invisible ~= lastInvisible then
-        lastInvisible = State.Invisible
-        if State.Invisible and LocalPlayer.Character then applyInvisible(LocalPlayer.Character)
-        elseif LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
+    if State.Invisible then
+        if LocalPlayer.Character then applyInvisible(LocalPlayer.Character) end
+    else
+        if LocalPlayer.Character then restoreInvisible(LocalPlayer.Character) end
     end
 end)
 LocalPlayer.CharacterAdded:Connect(function(ch)
     if State.Invisible then applyInvisible(ch) end
 end)
 
--- ================= ESP / FOV / Targeting (FOV shown only when Aimbot or SilentAim ON) =================
-local ESPObjects = {}
-local FOVCircle = nil
+-- ================= ESP / FOV / Target =================
+local ESPObjects={}
+local FOVCircle=nil
 if safeDrawing.available then
-    FOVCircle = newDrawing("Circle", { Color = Color3.fromRGB(0,255,255), Thickness = 2, Filled = false, Visible = false, Radius = State.FOVRadius })
+    FOVCircle=newDrawing("Circle",{Color=Color3.fromRGB(0,255,255),Thickness=2,Filled=false,Visible=false,Radius=State.FOVRadius})
 end
 
--- Helper to project world pos
 local function worldToScreenVec(pos)
-    local x,y,z = Camera:WorldToViewportPoint(pos)
-    return Vector2.new(x,y), z > 0
+    local x,y,z=Camera:WorldToViewportPoint(pos)
+    return Vector2.new(x,y),z>0
 end
 
--- store originals for existing players
-for _,plr in pairs(Players:GetPlayers()) do
-    if plr.Character then storeOriginalHitbox(plr) end
-end
-
--- Player connections to keep original stored
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(ch)
-        ch:WaitForChild("HumanoidRootPart", 5)
-        storeOriginalHitbox(plr)
-    end)
-end)
-
+local CurrentTarget=nil
 local function GetBestTarget()
-    local vw, vh = Camera.ViewportSize.X, Camera.ViewportSize.Y
-    local best = State.FOVRadius
-    local bestP = nil
+    local vw,vh=Camera.ViewportSize.X,Camera.ViewportSize.Y
+    local best=State.FOVRadius
+    local bestP=nil
     for _,p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(State.AimbotPart) then
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local pos3 = p.Character[State.AimbotPart].Position
-                local sp, onScreen = Camera:WorldToViewportPoint(pos3)
+        if p~=LocalPlayer and p.Character and p.Character:FindFirstChild(State.AimbotPart) then
+            local hum=p.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health>0 then
+                local sp,onScreen=Camera:WorldToViewportPoint(p.Character[State.AimbotPart].Position)
                 if onScreen then
-                    local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(vw/2, vh/2)).Magnitude
-                    if d < best then
-                        best = d
-                        bestP = p
-                    end
+                    local d=(Vector2.new(sp.X,sp.Y)-Vector2.new(vw/2,vh/2)).Magnitude
+                    if d<best then best= d; bestP=p end
                 end
             end
         end
@@ -359,154 +184,132 @@ local function GetBestTarget()
     return bestP
 end
 
+-- ================= Movement / Fly / NoClip =================
 RunService.RenderStepped:Connect(function()
-    -- Update FOV circle visibility only when Aimbot or SilentAim is on
-    if FOVCircle then
-        if (State.Aimbot or State.SilentAim) then
-            FOVCircle.Visible = true
-            pcall(function()
-                FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-                FOVCircle.Radius = State.FOVRadius
-                if State.FOVRainbow then
-                    FOVCircle.Color = Color3.fromHSV((tick()%5)/5,1,1)
-                else
-                    FOVCircle.Color = Color3.fromRGB(0,255,255)
-                end
-            end)
-        else
-            pcall(function() FOVCircle.Visible = false end)
-        end
+    local char=LocalPlayer.Character
+    if not char then return end
+    local hrp=char:FindFirstChild("HumanoidRootPart")
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if hum then pcall(function() hum.WalkSpeed=State.WalkSpeed; hum.JumpPower=State.JumpPower end) end
+
+    -- Fly
+    if State.Fly and hrp then
+        local camCF=Camera.CFrame
+        local moveDir=Vector3.new()
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir=moveDir+camCF.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir=moveDir-camCF.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir=moveDir-camCF.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir=moveDir+camCF.RightVector end
+        if moveDir.Magnitude>0 then pcall(function() hrp.Velocity=moveDir.Unit*State.FlySpeed end)
+        else pcall(function() hrp.Velocity=Vector3.new(0,0,0) end) end
     end
 
-    -- Hitbox application when enabled
+    -- NoClip
+    if State.NoClip and char then
+        for _,part in pairs(char:GetChildren()) do
+            if part:IsA("BasePart") then pcall(function() part.CanCollide=false end) end
+        end
+    end
+end)
+
+-- ================= Hitbox / ESP / FOV Update =================
+RunService.RenderStepped:Connect(function()
+    -- Hitbox
     if State.Hitbox then
         for _,p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
                 storeOriginalHitbox(p)
-                pcall(function()
-                    hrp.Size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize)
-                    hrp.CanCollide = false
-                end)
+                pcall(function() hrp.Size=Vector3.new(State.HitboxSize,State.HitboxSize,State.HitboxSize); hrp.CanCollide=false end)
             end
         end
     end
 
-    -- Acquire target if aiming enabled
-    if State.Aimbot or State.SilentAim then
-        CurrentTarget = GetBestTarget()
-    else
-        CurrentTarget = nil
+    -- Acquire target
+    if State.Aimbot or State.SilentAim then CurrentTarget=GetBestTarget() else CurrentTarget=nil end
+
+    -- FOV Circle
+    if FOVCircle then
+        if State.Aimbot or State.SilentAim then
+            FOVCircle.Visible=true
+            pcall(function()
+                FOVCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+                FOVCircle.Radius=State.FOVRadius
+                if State.FOVRainbow then
+                    FOVCircle.Color=Color3.fromHSV((tick()%5)/5,1,1)
+                else
+                    FOVCircle.Color=Color3.fromRGB(0,255,255)
+                end
+            end)
+        else FOVCircle.Visible=false end
     end
 
-    -- ESP update (box + HP)
+    -- ESP
     if safeDrawing.available then
         for _,p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChildOfClass("Humanoid")
                 if not ESPObjects[p] then
-                    ESPObjects[p] = {
-                        Outline = newDrawing("Square", {Color = State.ESPColor, Thickness = 2, Filled = false, Visible = false}),
-                        Text = newDrawing("Text", {Text = "", Color = State.ESPColor, Size = 14, Center = true, Visible = false})
-                    }
+                    ESPObjects[p]={Outline=newDrawing("Square",{Color=State.ESPColor,Thickness=2,Filled=false,Visible=false}),
+                                    Text=newDrawing("Text",{Text="",Color=State.ESPColor,Size=14,Center=true,Visible=false})}
                 end
-                local box = ESPObjects[p]
+                local box=ESPObjects[p]
                 if hrp and hum then
-                    local scr, onScreen = worldToScreenVec(hrp.Position)
+                    local scr,onScreen=worldToScreenVec(hrp.Position)
                     if onScreen and State.ESP then
-                        local sizeX, sizeY = 40, 80
+                        local sizeX,sizeY=40,80
                         pcall(function()
-                            box.Outline.Position = Vector2.new(scr.X - sizeX/2, scr.Y - sizeY/2)
-                            box.Outline.Size = Vector2.new(sizeX, sizeY)
-                            box.Outline.Color = State.ESPColor
-                            box.Outline.Visible = true
+                            box.Outline.Position=Vector2.new(scr.X-sizeX/2,scr.Y-sizeY/2)
+                            box.Outline.Size=Vector2.new(sizeX,sizeY)
+                            box.Outline.Color=State.ESPColor
+                            box.Outline.Visible=true
 
-                            box.Text.Position = Vector2.new(scr.X, scr.Y - sizeY/2 - 10)
-                            box.Text.Text = "HP: "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth)
-                            box.Text.Color = State.ESPColor
-                            box.Text.Visible = true
+                            box.Text.Position=Vector2.new(scr.X,scr.Y-sizeY/2-10)
+                            box.Text.Text="HP: "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth)
+                            box.Text.Color=State.ESPColor
+                            box.Text.Visible=true
 
-                            if State.TargetESP and CurrentTarget then
-                                if p == CurrentTarget then
-                                    box.Outline.Color = Color3.fromRGB(0,255,0)
-                                    box.Text.Color = Color3.fromRGB(0,255,0)
-                                end
+                            if State.TargetESP and CurrentTarget==p then
+                                box.Outline.Color=Color3.fromRGB(0,255,0)
+                                box.Text.Color=Color3.fromRGB(0,255,0)
                             end
                         end)
-                    else
-                        pcall(function() box.Outline.Visible = false; box.Text.Visible = false end)
-                    end
-                end
-            else
-                -- hide if no character
-                if ESPObjects[p] then
-                    pcall(function() if ESPObjects[p].Outline then ESPObjects[p].Outline.Visible = false end; if ESPObjects[p].Text then ESPObjects[p].Text.Visible = false end end)
+                    else pcall(function() box.Outline.Visible=false; box.Text.Visible=false end) end
                 end
             end
         end
     end
 end)
 
--- Clean up on player removal
-Players.PlayerRemoving:Connect(function(plr)
-    if ESPObjects[plr] then
-        pcall(function() if ESPObjects[plr].Outline then ESPObjects[plr].Outline.Visible = false end; if ESPObjects[plr].Text then ESPObjects[plr].Text.Visible = false end end)
-        ESPObjects[plr] = nil
-    end
-    restoreOriginalHitbox(plr)
-end)
-
--- ================= Silent Aim Hook (generalized replacement) =================
+-- ================= Silent Aim Hook =================
 do
-    local ok, mt = pcall(function() return getrawmetatable(game) end)
+    local ok,mt=pcall(function() return getrawmetatable(game) end)
     if ok and mt then
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-            if (State.SilentAim or State.Aimbot) and CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild(State.AimbotPart) and method == "FireServer" then
-                local targetPos = CurrentTarget.Character[State.AimbotPart].Position
-                -- replace Vector3 args or common table.position fields
-                for i = 1, #args do
-                    local a = args[i]
-                    if typeof(a) == "Vector3" then
-                        args[i] = targetPos
-                    elseif type(a) == "table" then
-                        if a.Position and typeof(a.Position) == "Vector3" then
-                            a.Position = targetPos
-                            args[i] = a
-                        elseif a.pos and typeof(a.pos) == "Vector3" then
-                            a.pos = targetPos
-                            args[i] = a
-                        elseif a.hitpos and typeof(a.hitpos) == "Vector3" then
-                            a.hitpos = targetPos
-                            args[i] = a
-                        end
+        local oldNamecall=mt.__namecall
+        setreadonly(mt,false)
+        mt.__namecall=newcclosure(function(self,...)
+            local method=getnamecallmethod()
+            local args={...}
+            if (State.SilentAim or State.Aimbot) and CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild(State.AimbotPart) and method=="FireServer" then
+                local targetPos=CurrentTarget.Character[State.AimbotPart].Position
+                for i=1,#args do
+                    local a=args[i]
+                    if typeof(a)=="Vector3" then args[i]=targetPos
+                    elseif type(a)=="table" then
+                        if a.Position and typeof(a.Position)=="Vector3" then a.Position=targetPos
+                        elseif a.pos and typeof(a.pos)=="Vector3" then a.pos=targetPos
+                        elseif a.hitpos and typeof(a.hitpos)=="Vector3" then a.hitpos=targetPos end
+                        args[i]=a
                     end
                 end
-                return oldNamecall(self, unpack(args))
+                return oldNamecall(self,unpack(args))
             end
-            return oldNamecall(self, ...)
+            return oldNamecall(self,...)
         end)
-        setreadonly(mt, true)
-    else
-        warn("Silent Aim hook unavailable on this executor.")
-    end
+        setreadonly(mt,true)
+    else warn("Silent Aim hook unavailable on this executor.") end
 end
 
--- ================= Force UI to reflect State (avoid 'open by default' mismatch) =================
-pcall(function() AimbotToggle:Set(State.Aimbot) end)
-pcall(function() SilentAimToggle:Set(State.SilentAim) end)
-pcall(function() AimbotPartDropdown:Set(State.AimbotPart) end)
-pcall(function() FOVSlider:Set(State.FOVRadius) end)
-pcall(function() RainbowFOVToggle:Set(State.FOVRainbow) end)
-pcall(function() HitboxToggle:Set(State.Hitbox) end)
-pcall(function() HitboxSizeSlider:Set(State.HitboxSize) end)
-pcall(function() ESPEnableToggle:Set(State.ESP) end)
-pcall(function() TargetESPToggle:Set(State.TargetESP) end)
-pcall(function() ESPColorPicker:Set(State.ESPColor) end)
-pcall(function() HitboxColorPicker:Set(State.HitboxColor) end)
+print("COCO HUB Loaded — Combat/ESP toggles default OFF; FOV visible only when Aimbot/SilentAim ON; Fly & NoClip ready")
 
-print("COCO HUB Loaded — Combat/ESP toggles default OFF; FOV visible only when Aimbot/SilentAim ON")
