@@ -1,7 +1,4 @@
--- COCO HUB | Delta Full Version | ArrayField UI
--- Features: Aimbot, SilentAim, ESP, Hitbox expand, Self-Hand Hitbox, Movement (Walk/Jump/Fly/NoClip), Invisible
--- Works on Delta Executor / Mobile
-
+-- COCO HUB | Delta Full Version | Hand Hitbox Visual Only
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -22,14 +19,17 @@ local State = {
     ESP=false,
     TargetESP=false,
     ESPColor=Color3.fromRGB(255,0,0),
-    Hitbox=false,
+    Hitbox=false,              -- expand HRP of others
     HitboxSize=10,
     HitboxColor=Color3.fromRGB(0,255,0),
 
-    -- Self hand hitbox
+    -- Self-hand hitbox (visual + touch)
     SelfHandHitbox=false,
-    HandTarget="Both",
-    HandHitboxSize=6,
+    HandTarget="Both",         -- "Both","Right","Left"
+    HandHitboxSize=1.0,        -- scale relative to hand (multiplier)
+    HandHitboxColor=Color3.fromRGB(0,255,0),
+    HandHitboxHitColor=Color3.fromRGB(255,0,0),
+    HandHitboxAlpha=0.7,
 
     -- Movement
     WalkSpeed=16,
@@ -48,7 +48,6 @@ do
     local ok, DrawingLib = pcall(function() return Drawing end)
     safeDrawing.available = ok and DrawingLib~=nil
 end
-
 local function newDrawing(kind, props)
     if not safeDrawing.available then return nil end
     local ok,obj = pcall(function() return Drawing.new(kind) end)
@@ -56,189 +55,68 @@ local function newDrawing(kind, props)
     if props then for k,v in pairs(props) do pcall(function() obj[k]=v end) end end
     return obj
 end
+-- ================= Hand Hitbox =================
+local HandHitboxes = {} -- [handPart] = {Part=part, Draw=square, Conn=touchConnection, lastHitTick=0}
+local function createHandHitboxFor(handPart)
+    if not handPart or not handPart:IsA("BasePart") then return end
+    if HandHitboxes[handPart] then return HandHitboxes[handPart] end
 
-local function isR15(char)
-    return char:FindFirstChild("RightLowerArm") ~= nil or char:FindFirstChild("RightHand") ~= nil
-end
+    -- create world part
+    local hb = Instance.new("Part")
+    hb.Name = "COCO_HUB_HandHitbox"
+    hb.Size = handPart.Size * (State.HandHitboxSize or 1)
+    hb.Transparency = State.HandHitboxAlpha or 0.7
+    hb.Anchored = true
+    hb.CanCollide = false
+    hb.CanTouch = true
+    hb.Parent = workspace
 
--- ================= Store original sizes/state =================
-local OriginalHitboxes = {}
-local function storeOriginalHitbox(plr)
-    if not plr or not plr.Character then return end
-    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-    if hrp then OriginalHitboxes[plr] = OriginalHitboxes[plr] or hrp.Size end
-end
-local function restoreOriginalHitbox(plr)
-    if not plr or not plr.Character then return end
-    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-    if hrp and OriginalHitboxes[plr] then
-        pcall(function() hrp.Size = OriginalHitboxes[plr]; hrp.CanCollide=false end)
-        OriginalHitboxes[plr] = nil
-    end
-end
+    -- drawing indicator
+    local draw = safeDrawing.available and newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false}) or nil
 
--- Self hand original sizes
-local OriginalHandSizes = {}
-local function storeOriginalHandSizes(char)
-    if not char then return end
-    if OriginalHandSizes[char] then return end
-    local leftName, rightName
-    if char:FindFirstChild("LeftHand") then leftName="LeftHand" end
-    if char:FindFirstChild("RightHand") then rightName="RightHand" end
-    if not leftName and char:FindFirstChild("Left Arm") then leftName="Left Arm" end
-    if not rightName and char:FindFirstChild("Right Arm") then rightName="Right Arm" end
-    OriginalHandSizes[char] = {Left=nil,Right=nil,LeftName=leftName,RightName=rightName}
-    if leftName and char:FindFirstChild(leftName) and char[leftName]:IsA("BasePart") then
-        OriginalHandSizes[char].Left = char[leftName].Size
-    end
-    if rightName and char:FindFirstChild(rightName) and char[rightName]:IsA("BasePart") then
-        OriginalHandSizes[char].Right = char[rightName].Size
-    end
-end
-local function restoreOriginalHandSizes(char)
-    if not char or not OriginalHandSizes[char] then return end
-    local info = OriginalHandSizes[char]
-    if info.LeftName and info.Left and char:FindFirstChild(info.LeftName) and char[info.LeftName]:IsA("BasePart") then
-        pcall(function() char[info.LeftName].Size = info.Left; char[info.LeftName].CanCollide=false end)
-    end
-    if info.RightName and info.Right and char:FindFirstChild(info.RightName) and char[info.RightName]:IsA("BasePart") then
-        pcall(function() char[info.RightName].Size = info.Right; char[info.RightName].CanCollide=false end)
-    end
-    OriginalHandSizes[char] = nil
-end
-
-Players.PlayerRemoving:Connect(function(plr)
-    OriginalHitboxes[plr]=nil
-end)
-
--- ================= ArrayField UI =================
-local success, ArrayField = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-end)
-if not success or not ArrayField then warn("Failed to load ArrayField UI"); return end
-
-local Window = ArrayField:CreateWindow({
-    Name="COCO HUB | Delta Pro Ultimate",
-    LoadingTitle="COCO HUB Loading",
-    ConfigurationSaving={Enabled=true,FileName="COCO_HUB_Delta"},
-    KeySystem=false
-})
-
--- Tabs
-local CombatTab = Window:CreateTab("Combat")
-local MoveTab = Window:CreateTab("Movement")
-local ESPTab = Window:CreateTab("ESP")
-local MiscTab = Window:CreateTab("Misc")
-
--- ================= UI Elements =================
--- Combat
-local AimbotToggle = CombatTab:CreateToggle({Name="Aimbot", CurrentValue=State.Aimbot, Callback=function(v) State.Aimbot=v end})
-local SilentAimToggle = CombatTab:CreateToggle({Name="Silent Aim", CurrentValue=State.SilentAim, Callback=function(v) State.SilentAim=v end})
-local AimbotPartDropdown = CombatTab:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption=State.AimbotPart, MultiSelection=false, Callback=function(v) State.AimbotPart=v end})
-local FOVSlider = CombatTab:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=State.FOVRadius, Callback=function(v) State.FOVRadius=v end})
-local RainbowFOVToggle = CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValue=State.FOVRainbow, Callback=function(v) State.FOVRainbow=v end})
-local HitboxToggle = CombatTab:CreateToggle({Name="Hitbox Expand", CurrentValue=State.Hitbox, Callback=function(v)
-    State.Hitbox=v
-    if not v then
-        for _,plr in pairs(Players:GetPlayers()) do if plr~=LocalPlayer then restoreOriginalHitbox(plr) end end
-    else
-        for _,plr in pairs(Players:GetPlayers()) do if plr~=LocalPlayer then storeOriginalHitbox(plr) end end
-    end
-end})
-local HitboxSizeSlider = CombatTab:CreateSlider({Name="Hitbox Size", Range={10,500}, Increment=1, CurrentValue=State.HitboxSize, Callback=function(v) State.HitboxSize=v end})
-local HitboxColorPicker = CombatTab:CreateColorPicker({Name="Hitbox Color", Color=State.HitboxColor, Callback=function(v) State.HitboxColor=v end})
-
--- Self-hand
-local SelfHandToggle = CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
-local HandSelect = CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
-local HandSizeSlider = CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={1,50}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
-
--- Movement
-MoveTab:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed, Callback=function(v) State.WalkSpeed=v end})
-MoveTab:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=State.JumpPower, Callback=function(v) State.JumpPower=v end})
-local FlyToggle = MoveTab:CreateToggle({Name="Fly", CurrentValue=State.Fly, Callback=function(v) State.Fly=v end})
-MoveTab:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=State.FlySpeed, Callback=function(v) State.FlySpeed=v end})
-local NoClipToggle = MoveTab:CreateToggle({Name="NoClip", CurrentValue=State.NoClip, Callback=function(v) State.NoClip=v end})
-
--- ESP / Misc
-local ESPEnableToggle = ESPTab:CreateToggle({Name="Enable ESP", CurrentValue=State.ESP, Callback=function(v) State.ESP=v end})
-local TargetESPToggle = ESPTab:CreateToggle({Name="Target ESP", CurrentValue=State.TargetESP, Callback=function(v) State.TargetESP=v end})
-local ESPColorPicker = ESPTab:CreateColorPicker({Name="ESP Color", Color=State.ESPColor, Callback=function(v) State.ESPColor=v end})
-local InvisibleToggle = MiscTab:CreateToggle({Name="Invisible", CurrentValue=State.Invisible, Callback=function(v) State.Invisible=v end})
-
--- GUI Hotkey
-UIS.InputBegan:Connect(function(input,gp)
-    if gp then return end
-    if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end
-end)
-
--- ================= Movement Implementation (Fly) =================
-local FlyControllers = {}
-local function enableFly(char)
-    if not char or FlyControllers[char] then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    local bv = Instance.new("BodyVelocity")
-    bv.Name="COCO_HUB_Fly_BV"; bv.MaxForce=Vector3.new(1e5,1e5,1e5); bv.P=1250; bv.Velocity=Vector3.new()
-    bv.Parent=hrp
-    local bg = Instance.new("BodyGyro")
-    bg.Name="COCO_HUB_Fly_BG"; bg.MaxTorque=Vector3.new(1e5,1e5,1e5); bg.P=3000; bg.CFrame=hrp.CFrame
-    bg.Parent=hrp
-    FlyControllers[char] = {BV=bv,BG=bg}
-end
-local function disableFly(char)
-    if not char or not FlyControllers[char] then return end
-    pcall(function()
-        local t = FlyControllers[char]
-        if t.BV then t.BV:Destroy() end
-        if t.BG then t.BG:Destroy() end
-    end)
-    FlyControllers[char]=nil
-end
-
--- Apply Movement
-RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then pcall(function() hum.WalkSpeed=State.WalkSpeed; hum.JumpPower=State.JumpPower end) end
-
-    -- Fly
-    if State.Fly then
-        enableFly(char)
-        local ctrl = FlyControllers[char]
-        if ctrl and ctrl.BV then
-            local camCF = Workspace.CurrentCamera.CFrame
-            local dir = Vector3.new()
-            if UIS:IsKeyDown(Enum.KeyCode.W) then dir=dir+camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.S) then dir=dir-camCF.LookVector end
-            if UIS:IsKeyDown(Enum.KeyCode.A) then dir=dir-camCF.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.D) then dir=dir+camCF.RightVector end
-            if UIS:IsKeyDown(Enum.KeyCode.Space) then dir=dir+Vector3.new(0,1,0) end
-            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir=dir-Vector3.new(0,1,0) end
-            if dir.Magnitude>0 then
-                ctrl.BV.Velocity=dir.Unit*State.FlySpeed
-                ctrl.BG.CFrame=Camera.CFrame
-            else
-                ctrl.BV.Velocity=Vector3.new()
+    -- touch handler: flash draw color on hit when touching other player's character
+    local conn
+    conn = hb.Touched:Connect(function(otherPart)
+        if not otherPart or not otherPart.Parent then return end
+        local hitPlr = Players:GetPlayerFromCharacter(otherPart.Parent)
+        if hitPlr and hitPlr ~= LocalPlayer then
+            if draw then
+                local prev = draw.Color
+                pcall(function() draw.Color = State.HandHitboxHitColor end)
+                delay(0.12, function() pcall(function() draw.Color = prev end) end)
             end
         end
-    else
-        disableFly(char)
-    end
+    end)
 
-    -- NoClip
-    if State.NoClip then
-        for _,p in pairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then pcall(function() p.CanCollide=false end) end
+    HandHitboxes[handPart] = {Part=hb, Draw=draw, Conn=conn}
+    return HandHitboxes[handPart]
+end
+
+local function destroyAllHandHitboxes()
+    for hand,data in pairs(HandHitboxes) do
+        pcall(function()
+            if data.Conn then data.Conn:Disconnect() end
+            if data.Part then data.Part:Destroy() end
+            if data.Draw then data.Draw.Visible = false end
+        end)
+    end
+    HandHitboxes = {}
+end
+
+-- ================= Movement =================
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then pcall(function() hum.WalkSpeed=State.WalkSpeed; hum.JumpPower=State.JumpPower end) end
+
+        -- NoClip
+        if State.NoClip then
+            for _,p in pairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide=false end
+            end
         end
     end
-end)
-
-LocalPlayer.CharacterRemoving:Connect(function(ch)
-    disableFly(ch)
-    restoreOriginalHandSizes(ch)
 end)
 
 -- ================= Invisible =================
@@ -248,23 +126,17 @@ local function applyInvisible(char)
     InvisibleStore[char] = {}
     for _,part in pairs(char:GetChildren()) do
         if part:IsA("BasePart") then
-            InvisibleStore[char][part]={Transparency=part.Transparency,CanCollide=part.CanCollide}
-            pcall(function() part.Transparency=1; part.CanCollide=false end)
-        elseif part:IsA("Accessory") then
-            local handle = part:FindFirstChildWhichIsA("BasePart")
-            if handle then
-                InvisibleStore[char][handle]={Transparency=handle.Transparency,CanCollide=handle.CanCollide}
-                pcall(function() handle.Transparency=1; handle.CanCollide=false end)
-            end
+            InvisibleStore[char][part] = {Transparency=part.Transparency, CanCollide=part.CanCollide}
+            part.Transparency=1; part.CanCollide=false
         end
     end
 end
 local function restoreInvisible(char)
     if not char or not InvisibleStore[char] then return end
     for part,props in pairs(InvisibleStore[char]) do
-        if part and part.Parent then pcall(function() part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end) end
+        if part and part.Parent then part.Transparency=props.Transparency; part.CanCollide=props.CanCollide end
     end
-    InvisibleStore[char]=nil
+    InvisibleStore[char] = nil
 end
 RunService.Heartbeat:Connect(function()
     if LocalPlayer.Character then
@@ -272,89 +144,52 @@ RunService.Heartbeat:Connect(function()
         else restoreInvisible(LocalPlayer.Character) end
     end
 end)
-LocalPlayer.CharacterAdded:Connect(function(ch) if State.Invisible then applyInvisible(ch) end end)
-
--- ================= ESP / FOV / Targeting =================
-local ESPObjects={}
-local FOVCircle=safeDrawing.available and newDrawing("Circle",{Color=Color3.fromRGB(0,255,255),Thickness=2,Filled=false,Visible=false,Radius=State.FOVRadius}) or nil
-
-local function worldToScreenVec(pos)
-    local x,y,z=Camera:WorldToViewportPoint(pos)
-    return Vector2.new(x,y), z>0
-end
-
--- store originals
-for _,plr in pairs(Players:GetPlayers()) do
-    if plr.Character then storeOriginalHitbox(plr); storeOriginalHandSizes(plr.Character) end
-end
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function(ch)
-        ch:WaitForChild("HumanoidRootPart",5)
-        storeOriginalHitbox(plr)
-    end)
-end)
-
-local CurrentTarget=nil
-local function GetBestTarget()
-    local vw,vh=Camera.ViewportSize.X,Camera.ViewportSize.Y
-    local best=State.FOVRadius
-    local bestP=nil
-    for _,p in pairs(Players:GetPlayers()) do
-        if p~=LocalPlayer and p.Character and p.Character:FindFirstChild(State.AimbotPart) then
-            local hum=p.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health>0 then
-                local pos3=p.Character[State.AimbotPart].Position
-                local sp,onScreen=Camera:WorldToViewportPoint(pos3)
-                if onScreen then
-                    local d=(Vector2.new(sp.X,sp.Y)-Vector2.new(vw/2,vh/2)).Magnitude
-                    if d<best then best=d; bestP=p end
-                end
-            end
-        end
-    end
-    return bestP
-end
-
--- Main loop for ESP / Hitbox / FOV / Self hand hitbox
+-- ================= Update Hand Hitboxes =================
 RunService.RenderStepped:Connect(function()
-    -- Hitbox for others
-    if State.Hitbox then
-        for _,p in pairs(Players:GetPlayers()) do
-            if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
-                storeOriginalHitbox(p)
-                pcall(function() hrp.Size=Vector3.new(State.HitboxSize,State.HitboxSize,State.HitboxSize); hrp.CanCollide=false end)
+    if State.SelfHandHitbox and LocalPlayer.Character then
+        local char = LocalPlayer.Character
+        local hands = {}
+        if State.HandTarget=="Both" or State.HandTarget=="Right" then
+            table.insert(hands,char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm") or char:FindFirstChild("RightLowerArm"))
+        end
+        if State.HandTarget=="Both" or State.HandTarget=="Left" then
+            table.insert(hands,char:FindFirstChild("LeftHand") or char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftLowerArm"))
+        end
+
+        local keep = {}
+        for _,hand in pairs(hands) do
+            if hand and hand:IsA("BasePart") then
+                local data = HandHitboxes[hand]
+                if not data then data=createHandHitboxFor(hand) end
+                if data and data.Part then
+                    data.Part.Size = hand.Size * (State.HandHitboxSize or 1)
+                    data.Part.CFrame = hand.CFrame
+                    if data.Draw then
+                        local scr,onScreen = Camera:WorldToViewportPoint(hand.Position)
+                        if onScreen then
+                            local s = math.clamp((hand.Size.Magnitude/2)*(State.HandHitboxSize or 1),6,200)
+                            data.Draw.Position=Vector2.new(scr.X-s/2,scr.Y-s/2)
+                            data.Draw.Size=Vector2.new(s,s)
+                            data.Draw.Color=State.HandHitboxColor
+                            data.Draw.Visible=true
+                        else data.Draw.Visible=false end
+                    end
+                end
+                keep[hand]=true
             end
         end
-    end
 
-    -- Targeting
-    if State.Aimbot or State.SilentAim then CurrentTarget=GetBestTarget() else CurrentTarget=nil end
-
-    -- FOV Circle
-    if FOVCircle then
-        if State.Aimbot or State.SilentAim then
-            FOVCircle.Visible=true
-            pcall(function()
-                FOVCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
-                FOVCircle.Radius=State.FOVRadius
-                if State.FOVRainbow then FOVCircle.Color=Color3.fromHSV(tick()%5/5,1,1) end
-            end)
-        else FOVCircle.Visible=false end
-    end
-
-    -- Self-hand hitbox
-    if State.SelfHandHitbox and LocalPlayer.Character then
-        local char=LocalPlayer.Character
-        storeOriginalHandSizes(char)
-        local size=Vector3.new(State.HandHitboxSize,State.HandHitboxSize,State.HandHitboxSize)
-        if (State.HandTarget=="Both" or State.HandTarget=="Left") and char:FindFirstChild(OriginalHandSizes[char].LeftName) then
-            pcall(function() char[OriginalHandSizes[char].LeftName].Size=size; char[OriginalHandSizes[char].LeftName].CanCollide=false end)
+        for hand,data in pairs(HandHitboxes) do
+            if not keep[hand] then
+                if data.Conn then data.Conn:Disconnect() end
+                if data.Part then data.Part:Destroy() end
+                if data.Draw then data.Draw.Visible=false end
+                HandHitboxes[hand]=nil
+            end
         end
-        if (State.HandTarget=="Both" or State.HandTarget=="Right") and char:FindFirstChild(OriginalHandSizes[char].RightName) then
-            pcall(function() char[OriginalHandSizes[char].RightName].Size=size; char[OriginalHandSizes[char].RightName].CanCollide=false end)
-        end
-    elseif LocalPlayer.Character then restoreOriginalHandSizes(LocalPlayer.Character) end
+    else
+        destroyAllHandHitboxes()
+    end
 end)
 
-print("COCO HUB | Delta loaded successfully!")
+print("COCO HUB | Hand Hitbox Visual Ready")
