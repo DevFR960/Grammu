@@ -26,6 +26,7 @@ local State = {
     SelfHandHitbox=false,
     HandTarget="Both",
     HandHitboxColor=Color3.fromRGB(0,255,0),
+    HandHitboxSize=20,
 
     -- Movement
     WalkSpeed=16,
@@ -58,7 +59,12 @@ end
 
 -- ================= ArrayField UI =================
 local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-local Window = ArrayField:CreateWindow({ Name="COCO HUB | Delta Pro Ultimate", LoadingTitle="COCO HUB Loading", ConfigurationSaving={Enabled=true,FileName="COCO_HUB_Delta"}, KeySystem=false })
+local Window = ArrayField:CreateWindow({
+    Name="COCO HUB | Delta Pro Ultimate",
+    LoadingTitle="COCO HUB Loading",
+    ConfigurationSaving={Enabled=true,FileName="COCO_HUB_Delta"},
+    KeySystem=false
+})
 
 local CombatTab = Window:CreateTab("Combat")
 local MoveTab = Window:CreateTab("Movement")
@@ -77,6 +83,7 @@ local RainbowFOVToggle = CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValu
 local SelfHandToggle = CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
 local HandSelect = CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
 local HandColorPicker = CombatTab:CreateColorPicker({Name="Hand Hitbox Color", Color=State.HandHitboxColor, Callback=function(v) State.HandHitboxColor=v end})
+local HandSizeSlider = CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={5,100}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
 
 -- Movement
 MoveTab:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed, Callback=function(v) State.WalkSpeed=v end})
@@ -92,7 +99,10 @@ local ESPColorPicker = ESPTab:CreateColorPicker({Name="ESP Color", Color=State.E
 local InvisibleToggle = MiscTab:CreateToggle({Name="Invisible", CurrentValue=State.Invisible, Callback=function(v) State.Invisible=v end})
 
 -- GUI Hotkey
-UIS.InputBegan:Connect(function(input,gp) if gp then return end if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end end)
+UIS.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end
+end)
 
 -- ================= Movement / Fly =================
 local FlyControllers = {}
@@ -196,21 +206,20 @@ RunService.RenderStepped:Connect(function()
     if State.HandTarget=="Both" or State.HandTarget=="Right" then table.insert(hands,"RightHand") end
     if State.HandTarget=="Both" or State.HandTarget=="Left" then table.insert(hands,"LeftHand") end
 
-    -- create drawing if missing
     for _,hname in pairs(hands) do
-        if ch:FindFirstChild(hname) then
+        local part = ch:FindFirstChild(hname)
+        if part then
             if not HandESP[hname] then
-                HandESP[hname]=newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
+                HandESP[hname] = newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
             end
-            local part=ch[hname]
             local pos,onScreen=worldToScreenVec(part.Position)
             if onScreen then
-                local size=Vector2.new(20,20)
+                local size = Vector2.new(State.HandHitboxSize,State.HandHitboxSize)
                 pcall(function()
-                    HandESP[hname].Position=Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
-                    HandESP[hname].Size=size
-                    HandESP[hname].Color=State.HandHitboxColor
-                    HandESP[hname].Visible=State.SelfHandHitbox
+                    HandESP[hname].Position = Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
+                    HandESP[hname].Size = size
+                    HandESP[hname].Color = State.HandHitboxColor
+                    HandESP[hname].Visible = State.SelfHandHitbox
                 end)
             else HandESP[hname].Visible=false end
         end
