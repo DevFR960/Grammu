@@ -26,7 +26,6 @@ local State = {
     SelfHandHitbox=false,
     HandTarget="Both",
     HandHitboxColor=Color3.fromRGB(0,255,0),
-    HandHitboxSize=20,
 
     -- Movement
     WalkSpeed=16,
@@ -78,7 +77,6 @@ local RainbowFOVToggle = CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValu
 local SelfHandToggle = CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
 local HandSelect = CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
 local HandColorPicker = CombatTab:CreateColorPicker({Name="Hand Hitbox Color", Color=State.HandHitboxColor, Callback=function(v) State.HandHitboxColor=v end})
-local HandSizeSlider = CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={5,100}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
 
 -- Movement
 MoveTab:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed, Callback=function(v) State.WalkSpeed=v end})
@@ -188,7 +186,7 @@ RunService.Heartbeat:Connect(function()
 end)
 LocalPlayer.CharacterAdded:Connect(function(ch) if State.Invisible then applyInvisible(ch) end end)
 
--- ================= Self Hand Hitbox Visual =================
+-- ================= Self Hand Hitbox Visual (Outline) =================
 local HandESP = {}
 RunService.RenderStepped:Connect(function()
     local ch = LocalPlayer.Character
@@ -199,21 +197,36 @@ RunService.RenderStepped:Connect(function()
     if State.HandTarget=="Both" or State.HandTarget=="Left" then table.insert(hands,"LeftHand") end
 
     for _,hname in pairs(hands) do
-        if ch:FindFirstChild(hname) then
+        local part = ch:FindFirstChild(hname)
+        if part then
             if not HandESP[hname] then
-                HandESP[hname]=newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
+                -- สร้างเส้นรอบมือ 4 เส้น
+                HandESP[hname]={}
+                for i=1,4 do
+                    HandESP[hname][i] = newDrawing("Line",{Color=State.HandHitboxColor,Thickness=2,Visible=false})
+                end
             end
-            local part=ch[hname]
-            local pos,onScreen=worldToScreenVec(part.Position)
+            local pos,onScreen = worldToScreenVec(part.Position)
             if onScreen then
-                local size = Vector2.new(State.HandHitboxSize,State.HandHitboxSize)
-                pcall(function()
-                    HandESP[hname].Position = Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
-                    HandESP[hname].Size = size
-                    HandESP[hname].Color = State.HandHitboxColor
-                    HandESP[hname].Visible = State.SelfHandHitbox
-                end)
-            else HandESP[hname].Visible=false end
+                local size = Vector2.new(20,20)
+                local corners = {
+                    Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2),
+                    Vector2.new(pos.X+size.X/2,pos.Y-size.Y/2),
+                    Vector2.new(pos.X+size.X/2,pos.Y+size.Y/2),
+                    Vector2.new(pos.X-size.X/2,pos.Y+size.Y/2)
+                }
+                for i=1,4 do
+                    local line = HandESP[hname][i]
+                    line.From = corners[i]
+                    line.To = corners[i%4+1]
+                    line.Color = State.HandHitboxColor
+                    line.Visible = State.SelfHandHitbox
+                end
+            else
+                for i=1,4 do
+                    if HandESP[hname] and HandESP[hname][i] then HandESP[hname][i].Visible=false end
+                end
+            end
         end
     end
 end)
