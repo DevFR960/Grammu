@@ -1,5 +1,5 @@
 -- COCO HUB | Delta Full Version | ArrayField UI
--- Features: Aimbot, SilentAim, ESP, Self Hand Hitbox (visual only), Movement, Fly, Invisible
+-- Features: Aimbot, SilentAim, ESP, Self Hand Hitbox (visual + adjustable size), Movement, Fly, Invisible
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -22,10 +22,11 @@ local State = {
     TargetESP=false,
     ESPColor=Color3.fromRGB(255,0,0),
 
-    -- Self hand hitbox (visual only)
+    -- Self hand hitbox
     SelfHandHitbox=false,
     HandTarget="Both",
     HandHitboxColor=Color3.fromRGB(0,255,0),
+    HandHitboxSize=30, -- default size
 
     -- Movement
     WalkSpeed=16,
@@ -67,32 +68,36 @@ local MiscTab = Window:CreateTab("Misc")
 
 -- ================= UI Elements =================
 -- Combat
-local AimbotToggle = CombatTab:CreateToggle({Name="Aimbot", CurrentValue=State.Aimbot, Callback=function(v) State.Aimbot=v end})
-local SilentAimToggle = CombatTab:CreateToggle({Name="Silent Aim", CurrentValue=State.SilentAim, Callback=function(v) State.SilentAim=v end})
-local AimbotPartDropdown = CombatTab:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption=State.AimbotPart, MultiSelection=false, Callback=function(v) State.AimbotPart=v end})
-local FOVSlider = CombatTab:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=State.FOVRadius, Callback=function(v) State.FOVRadius=v end})
-local RainbowFOVToggle = CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValue=State.FOVRainbow, Callback=function(v) State.FOVRainbow=v end})
+CombatTab:CreateToggle({Name="Aimbot", CurrentValue=State.Aimbot, Callback=function(v) State.Aimbot=v end})
+CombatTab:CreateToggle({Name="Silent Aim", CurrentValue=State.SilentAim, Callback=function(v) State.SilentAim=v end})
+CombatTab:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"}, CurrentOption=State.AimbotPart, MultiSelection=false, Callback=function(v) State.AimbotPart=v end})
+CombatTab:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=State.FOVRadius, Callback=function(v) State.FOVRadius=v end})
+CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValue=State.FOVRainbow, Callback=function(v) State.FOVRainbow=v end})
 
 -- Self hand hitbox visual
-local SelfHandToggle = CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
-local HandSelect = CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
-local HandColorPicker = CombatTab:CreateColorPicker({Name="Hand Hitbox Color", Color=State.HandHitboxColor, Callback=function(v) State.HandHitboxColor=v end})
+CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
+CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
+CombatTab:CreateColorPicker({Name="Hand Hitbox Color", Color=State.HandHitboxColor, Callback=function(v) State.HandHitboxColor=v end})
+CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={10,200}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
 
 -- Movement
 MoveTab:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed, Callback=function(v) State.WalkSpeed=v end})
 MoveTab:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=State.JumpPower, Callback=function(v) State.JumpPower=v end})
-local FlyToggle = MoveTab:CreateToggle({Name="Fly", CurrentValue=State.Fly, Callback=function(v) State.Fly=v end})
+MoveTab:CreateToggle({Name="Fly", CurrentValue=State.Fly, Callback=function(v) State.Fly=v end})
 MoveTab:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=State.FlySpeed, Callback=function(v) State.FlySpeed=v end})
-local NoClipToggle = MoveTab:CreateToggle({Name="NoClip", CurrentValue=State.NoClip, Callback=function(v) State.NoClip=v end})
+MoveTab:CreateToggle({Name="NoClip", CurrentValue=State.NoClip, Callback=function(v) State.NoClip=v end})
 
 -- ESP / Misc
-local ESPEnableToggle = ESPTab:CreateToggle({Name="Enable ESP", CurrentValue=State.ESP, Callback=function(v) State.ESP=v end})
-local TargetESPToggle = ESPTab:CreateToggle({Name="Target ESP", CurrentValue=State.TargetESP, Callback=function(v) State.TargetESP=v end})
-local ESPColorPicker = ESPTab:CreateColorPicker({Name="ESP Color", Color=State.ESPColor, Callback=function(v) State.ESPColor=v end})
-local InvisibleToggle = MiscTab:CreateToggle({Name="Invisible", CurrentValue=State.Invisible, Callback=function(v) State.Invisible=v end})
+ESPTab:CreateToggle({Name="Enable ESP", CurrentValue=State.ESP, Callback=function(v) State.ESP=v end})
+ESPTab:CreateToggle({Name="Target ESP", CurrentValue=State.TargetESP, Callback=function(v) State.TargetESP=v end})
+ESPTab:CreateColorPicker({Name="ESP Color", Color=State.ESPColor, Callback=function(v) State.ESPColor=v end})
+MiscTab:CreateToggle({Name="Invisible", CurrentValue=State.Invisible, Callback=function(v) State.Invisible=v end})
 
 -- GUI Hotkey
-UIS.InputBegan:Connect(function(input,gp) if gp then return end if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end end)
+UIS.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end
+end)
 
 -- ================= Movement / Fly =================
 local FlyControllers = {}
@@ -122,11 +127,8 @@ RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end)
-        end
+        if hum then pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end) end
 
-        -- Fly
         if State.Fly then
             enableFly(char)
             local ctrl = FlyControllers[char]
@@ -144,7 +146,6 @@ RunService.Heartbeat:Connect(function()
             end
         else disableFly(char) end
 
-        -- NoClip
         if State.NoClip then
             for _,p in pairs(char:GetDescendants()) do
                 if p:IsA("BasePart") then p.CanCollide=false end
@@ -186,7 +187,7 @@ RunService.Heartbeat:Connect(function()
 end)
 LocalPlayer.CharacterAdded:Connect(function(ch) if State.Invisible then applyInvisible(ch) end end)
 
--- ================= Self Hand Hitbox Visual (Outline) =================
+-- ================= Self Hand Hitbox Visual =================
 local HandESP = {}
 RunService.RenderStepped:Connect(function()
     local ch = LocalPlayer.Character
@@ -200,33 +201,19 @@ RunService.RenderStepped:Connect(function()
         local part = ch:FindFirstChild(hname)
         if part then
             if not HandESP[hname] then
-                -- สร้างเส้นรอบมือ 4 เส้น
-                HandESP[hname]={}
-                for i=1,4 do
-                    HandESP[hname][i] = newDrawing("Line",{Color=State.HandHitboxColor,Thickness=2,Visible=false})
-                end
+                HandESP[hname]=newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
             end
-            local pos,onScreen = worldToScreenVec(part.Position)
+            local pos,onScreen=worldToScreenVec(part.Position)
             if onScreen then
-                local size = Vector2.new(20,20)
-                local corners = {
-                    Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2),
-                    Vector2.new(pos.X+size.X/2,pos.Y-size.Y/2),
-                    Vector2.new(pos.X+size.X/2,pos.Y+size.Y/2),
-                    Vector2.new(pos.X-size.X/2,pos.Y+size.Y/2)
-                }
-                for i=1,4 do
-                    local line = HandESP[hname][i]
-                    line.From = corners[i]
-                    line.To = corners[i%4+1]
-                    line.Color = State.HandHitboxColor
-                    line.Visible = State.SelfHandHitbox
-                end
-            else
-                for i=1,4 do
-                    if HandESP[hname] and HandESP[hname][i] then HandESP[hname][i].Visible=false end
-                end
-            end
+                local size = Vector2.new(State.HandHitboxSize,State.HandHitboxSize)
+                pcall(function()
+                    HandESP[hname].Position=Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
+                    HandESP[hname].Size=size
+                    HandESP[hname].Color=State.HandHitboxColor
+                    HandESP[hname].Visible=State.SelfHandHitbox
+                end)
+            else HandESP[hname].Visible=false end
         end
     end
 end)
+
