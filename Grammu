@@ -1,5 +1,5 @@
 -- COCO HUB | Delta Full Version | ArrayField UI
--- Features: Aimbot, SilentAim, ESP, Self Hand Hitbox (visual only, adjustable), Movement, Fly, Invisible
+-- Features: Aimbot, SilentAim, ESP, Self Hand Hitbox (visual only + adjustable), Movement, Fly, Invisible, NoClip
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -17,16 +17,16 @@ local State = {
     FOVRadius=120,
     FOVRainbow=false,
 
-    -- ESP / Hitbox
+    -- ESP
     ESP=false,
     TargetESP=false,
     ESPColor=Color3.fromRGB(255,0,0),
 
-    -- Self hand hitbox (visual only)
+    -- Self Hand Hitbox
     SelfHandHitbox=false,
     HandTarget="Both",
     HandHitboxColor=Color3.fromRGB(0,255,0),
-    HandHitboxSize=20, -- new slider
+    HandHitboxSize=20,
 
     -- Movement
     WalkSpeed=16,
@@ -74,11 +74,11 @@ CombatTab:CreateDropdown({Name="Aimbot Part", Options={"Head","HumanoidRootPart"
 CombatTab:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=State.FOVRadius, Callback=function(v) State.FOVRadius=v end})
 CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValue=State.FOVRainbow, Callback=function(v) State.FOVRainbow=v end})
 
--- Self hand hitbox visual
+-- Self Hand Hitbox UI
 CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
 CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
 CombatTab:CreateColorPicker({Name="Hand Hitbox Color", Color=State.HandHitboxColor, Callback=function(v) State.HandHitboxColor=v end})
-CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={5,100}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
+CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={10,100}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
 
 -- Movement
 MoveTab:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed, Callback=function(v) State.WalkSpeed=v end})
@@ -127,7 +127,9 @@ RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end) end
+        if hum then
+            pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end)
+        end
 
         -- Fly
         if State.Fly then
@@ -189,7 +191,7 @@ RunService.Heartbeat:Connect(function()
 end)
 LocalPlayer.CharacterAdded:Connect(function(ch) if State.Invisible then applyInvisible(ch) end end)
 
--- ================= Self Hand Hitbox Visual =================
+-- ================= Self Hand Hitbox =================
 local HandESP = {}
 RunService.RenderStepped:Connect(function()
     local ch = LocalPlayer.Character
@@ -207,14 +209,16 @@ RunService.RenderStepped:Connect(function()
             end
             local pos,onScreen = worldToScreenVec(part.Position)
             if onScreen then
-                local size = Vector2.new(State.HandHitboxSize,State.HandHitboxSize)
+                local size = Vector2.new(State.HandHitboxSize, State.HandHitboxSize)
                 pcall(function()
                     HandESP[hname].Position = Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
                     HandESP[hname].Size = size
                     HandESP[hname].Color = State.HandHitboxColor
                     HandESP[hname].Visible = State.SelfHandHitbox
                 end)
-            else HandESP[hname].Visible=false end
+            else
+                HandESP[hname].Visible=false
+            end
         end
     end
 end)
