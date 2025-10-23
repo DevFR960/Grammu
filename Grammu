@@ -59,12 +59,7 @@ end
 
 -- ================= ArrayField UI =================
 local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-local Window = ArrayField:CreateWindow({
-    Name="COCO HUB | Delta Pro Ultimate",
-    LoadingTitle="COCO HUB Loading",
-    ConfigurationSaving={Enabled=true,FileName="COCO_HUB_Delta"},
-    KeySystem=false
-})
+local Window = ArrayField:CreateWindow({ Name="COCO HUB | Delta Pro Ultimate", LoadingTitle="COCO HUB Loading", ConfigurationSaving={Enabled=true,FileName="COCO_HUB_Delta"}, KeySystem=false })
 
 local CombatTab = Window:CreateTab("Combat")
 local MoveTab = Window:CreateTab("Movement")
@@ -99,10 +94,7 @@ local ESPColorPicker = ESPTab:CreateColorPicker({Name="ESP Color", Color=State.E
 local InvisibleToggle = MiscTab:CreateToggle({Name="Invisible", CurrentValue=State.Invisible, Callback=function(v) State.Invisible=v end})
 
 -- GUI Hotkey
-UIS.InputBegan:Connect(function(input,gp)
-    if gp then return end
-    if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end
-end)
+UIS.InputBegan:Connect(function(input,gp) if gp then return end if input.KeyCode==Enum.KeyCode.RightShift then Window:Toggle() end end)
 
 -- ================= Movement / Fly =================
 local FlyControllers = {}
@@ -207,11 +199,11 @@ RunService.RenderStepped:Connect(function()
     if State.HandTarget=="Both" or State.HandTarget=="Left" then table.insert(hands,"LeftHand") end
 
     for _,hname in pairs(hands) do
-        local part = ch:FindFirstChild(hname)
-        if part then
+        if ch:FindFirstChild(hname) then
             if not HandESP[hname] then
-                HandESP[hname] = newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
+                HandESP[hname]=newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
             end
+            local part=ch[hname]
             local pos,onScreen=worldToScreenVec(part.Position)
             if onScreen then
                 local size = Vector2.new(State.HandHitboxSize,State.HandHitboxSize)
