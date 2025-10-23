@@ -1,5 +1,5 @@
 -- COCO HUB | Delta Full Version | ArrayField UI
--- Features: Aimbot, SilentAim, ESP, Self Hand Hitbox (visual + adjustable size), Movement, Fly, Invisible
+-- Features: Aimbot, SilentAim, ESP, Self Hand Hitbox (visual only, adjustable), Movement, Fly, Invisible
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -22,11 +22,11 @@ local State = {
     TargetESP=false,
     ESPColor=Color3.fromRGB(255,0,0),
 
-    -- Self hand hitbox
+    -- Self hand hitbox (visual only)
     SelfHandHitbox=false,
     HandTarget="Both",
     HandHitboxColor=Color3.fromRGB(0,255,0),
-    HandHitboxSize=30, -- default size
+    HandHitboxSize=20, -- new slider
 
     -- Movement
     WalkSpeed=16,
@@ -78,7 +78,7 @@ CombatTab:CreateToggle({Name="Rainbow FOV", CurrentValue=State.FOVRainbow, Callb
 CombatTab:CreateToggle({Name="Self Hand Hitbox", CurrentValue=State.SelfHandHitbox, Callback=function(v) State.SelfHandHitbox=v end})
 CombatTab:CreateDropdown({Name="Hand Target", Options={"Both","Right","Left"}, CurrentOption=State.HandTarget, Callback=function(v) State.HandTarget=v end})
 CombatTab:CreateColorPicker({Name="Hand Hitbox Color", Color=State.HandHitboxColor, Callback=function(v) State.HandHitboxColor=v end})
-CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={10,200}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
+CombatTab:CreateSlider({Name="Hand Hitbox Size", Range={5,100}, Increment=1, CurrentValue=State.HandHitboxSize, Callback=function(v) State.HandHitboxSize=v end})
 
 -- Movement
 MoveTab:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=State.WalkSpeed, Callback=function(v) State.WalkSpeed=v end})
@@ -129,6 +129,7 @@ RunService.Heartbeat:Connect(function()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then pcall(function() hum.WalkSpeed = State.WalkSpeed; hum.JumpPower = State.JumpPower end) end
 
+        -- Fly
         if State.Fly then
             enableFly(char)
             local ctrl = FlyControllers[char]
@@ -146,6 +147,7 @@ RunService.Heartbeat:Connect(function()
             end
         else disableFly(char) end
 
+        -- NoClip
         if State.NoClip then
             for _,p in pairs(char:GetDescendants()) do
                 if p:IsA("BasePart") then p.CanCollide=false end
@@ -201,19 +203,18 @@ RunService.RenderStepped:Connect(function()
         local part = ch:FindFirstChild(hname)
         if part then
             if not HandESP[hname] then
-                HandESP[hname]=newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
+                HandESP[hname] = newDrawing("Square",{Color=State.HandHitboxColor,Thickness=2,Filled=false,Visible=false})
             end
-            local pos,onScreen=worldToScreenVec(part.Position)
+            local pos,onScreen = worldToScreenVec(part.Position)
             if onScreen then
                 local size = Vector2.new(State.HandHitboxSize,State.HandHitboxSize)
                 pcall(function()
-                    HandESP[hname].Position=Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
-                    HandESP[hname].Size=size
-                    HandESP[hname].Color=State.HandHitboxColor
-                    HandESP[hname].Visible=State.SelfHandHitbox
+                    HandESP[hname].Position = Vector2.new(pos.X-size.X/2,pos.Y-size.Y/2)
+                    HandESP[hname].Size = size
+                    HandESP[hname].Color = State.HandHitboxColor
+                    HandESP[hname].Visible = State.SelfHandHitbox
                 end)
             else HandESP[hname].Visible=false end
         end
     end
 end)
-
