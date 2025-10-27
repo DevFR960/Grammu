@@ -1,111 +1,97 @@
--- COCO HUB | Universal PRO Edition | ArrayField UI
--- Supports: Delta / KRNL / Xeno
--- Developer: Dechatorn x GPT-5
+-- COCO HUB | Aimbot + SilentAim (TeamCheck + WallCheck + H-toggle LockPart)
+-- Developer: Dechatorn x GPT-5 (updated)
+-- Supports: KRNL / Delta / Xeno
 
--- // Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Camera = Workspace.CurrentCamera
+-- Services
+local Players     = game:GetService("Players")
+local Workspace   = game:GetService("Workspace")
+local RunService  = game:GetService("RunService")
+local UIS         = game:GetService("UserInputService")
+local Camera      = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- // State
+-- Settings / State
 local State = {
     Aimbot = false,
     SilentAim = false,
     AutoShoot = false,
-    LockPart = "Head",
-    FOVRadius = 180,
+    LockPart = "Head",        -- DEFAULT: Head
+    TeamCheck = true,
+    WallCheck = true,
+    FOV = 160,
     RainbowFOV = true,
-    ESP = false,
-    TeamTags = true,
-    Fly = false,
-    FlySpeed = 60,
-    NoClip = false,
-    WalkSpeed = 16,
-    JumpPower = 50,
-    Invisible = false,
-    SelfHandHitbox = false,
-    HandHitboxSize = 20,
-    ESPColor = Color3.fromRGB(255,0,0)
 }
 
--- // Drawing Setup
+-- Drawing FOV (safe-guard if Drawing available)
 local canDraw = pcall(function() return Drawing.new("Circle") end)
 local FOVCircle
 if canDraw then
     FOVCircle = Drawing.new("Circle")
     FOVCircle.Thickness = 2
     FOVCircle.NumSides = 100
-    FOVCircle.Radius = State.FOVRadius
-    FOVCircle.Color = Color3.fromRGB(255,255,255)
+    FOVCircle.Radius = State.FOV
     FOVCircle.Filled = false
-    FOVCircle.Visible = true
+    FOVCircle.Color = Color3.fromRGB(255,255,255)
+    FOVCircle.Visible = false
 end
 
--- // UI (ArrayField)
-local success, ArrayField = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
-end)
-if not success then return warn("ArrayField failed to load!") end
+-- Utility: alive check
+local function isAlive(plr)
+    if not plr or not plr.Character then return false end
+    local h = plr.Character:FindFirstChildOfClass("Humanoid")
+    return h and h.Health and h.Health > 0
+end
 
-local Window = ArrayField:CreateWindow({
-    Name = "COCO HUB | ArrayField PRO",
-    LoadingTitle = "Loading COCO HUB...",
-    ConfigurationSaving = {Enabled = true, FileName = "COCO_HUB_PRO"},
-    KeySystem = false
-})
-
-local Combat = Window:CreateTab("Combat")
-local Visual = Window:CreateTab("Visual")
-local Move = Window:CreateTab("Movement")
-local Misc = Window:CreateTab("Misc")
-
--- // Combat UI
-Combat:CreateToggle({Name="Aimbot", CurrentValue=false, Callback=function(v) State.Aimbot=v end})
-Combat:CreateToggle({Name="Silent Aim", CurrentValue=false, Callback=function(v) State.SilentAim=v end})
-Combat:CreateToggle({Name="Auto Shoot", CurrentValue=false, Callback=function(v) State.AutoShoot=v end})
-Combat:CreateDropdown({Name="Lock Part", Options={"Head","HumanoidRootPart"}, CurrentOption="Head", Callback=function(v) State.LockPart=v end})
-Combat:CreateSlider({Name="FOV Radius", Range={50,1000}, Increment=1, CurrentValue=180, Callback=function(v) State.FOVRadius=v end})
-Combat:CreateToggle({Name="Rainbow FOV", CurrentValue=true, Callback=function(v) State.RainbowFOV=v end})
-
--- // Visual UI
-Visual:CreateToggle({Name="ESP", CurrentValue=false, Callback=function(v) State.ESP=v end})
-Visual:CreateToggle({Name="Team Tags", CurrentValue=true, Callback=function(v) State.TeamTags=v end})
-Visual:CreateColorPicker({Name="ESP Color", Color=State.ESPColor, Callback=function(v) State.ESPColor=v end})
-Visual:CreateToggle({Name="Self Hand Hitbox", CurrentValue=false, Callback=function(v) State.SelfHandHitbox=v end})
-
--- // Movement UI
-Move:CreateSlider({Name="WalkSpeed", Range={16,200}, Increment=1, CurrentValue=16, Callback=function(v) State.WalkSpeed=v end})
-Move:CreateSlider({Name="JumpPower", Range={50,300}, Increment=1, CurrentValue=50, Callback=function(v) State.JumpPower=v end})
-Move:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) State.Fly=v end})
-Move:CreateSlider({Name="Fly Speed", Range={10,200}, Increment=1, CurrentValue=60, Callback=function(v) State.FlySpeed=v end})
-Move:CreateToggle({Name="NoClip", CurrentValue=false, Callback=function(v) State.NoClip=v end})
-
--- // Misc
-Misc:CreateToggle({Name="Invisible", CurrentValue=false, Callback=function(v) State.Invisible=v end})
-
--- // GUI Toggle
-UIS.InputBegan:Connect(function(i,gp)
-    if gp then return end
-    if i.KeyCode == Enum.KeyCode.RightShift then
-        Window:Toggle()
+-- Team check
+local function isTeammate(plr)
+    if not State.TeamCheck then return false end
+    if not plr or not LocalPlayer then return false end
+    if plr.Team and LocalPlayer.Team then
+        return plr.Team == LocalPlayer.Team
     end
-end)
+    return false
+end
 
--- // Find Closest Target
+-- Wall check using Raycast
+local function isVisible(part)
+    if not State.WallCheck then return true end
+    if not part then return false end
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.IgnoreWater = true
+    local result = Workspace:Raycast(origin, direction, rayParams)
+    if not result then
+        return true
+    else
+        -- if hit the target part or something inside target's character, visible
+        if result.Instance and result.Instance:IsDescendantOf(part.Parent) then
+            return true
+        end
+        return false
+    end
+end
+
+-- Get closest target by screen distance inside FOV, with Team & Wall checks
 local function getClosestTarget()
-    local nearest, dist = nil, State.FOVRadius
-    for _,plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(State.LockPart) and plr.Character:FindFirstChildOfClass("Humanoid") then
-            local part = plr.Character[State.LockPart]
-            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-            if onScreen then
-                local mag = (Vector2.new(pos.X,pos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-                if mag < dist then
-                    dist = mag
-                    nearest = plr
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local nearest, bestDist = nil, State.FOV
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and isAlive(plr) and (not isTeammate(plr)) then
+            local char = plr.Character
+            if char then
+                local part = char:FindFirstChild(State.LockPart)
+                if part and isVisible(part) then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                        if dist < bestDist then
+                            bestDist = dist
+                            nearest = plr
+                        end
+                    end
                 end
             end
         end
@@ -113,126 +99,94 @@ local function getClosestTarget()
     return nearest
 end
 
--- // Aimbot Loop
+-- Update FOV circle
 RunService.RenderStepped:Connect(function()
-    local target = getClosestTarget()
-
     if FOVCircle then
-        local t = tick()*2
+        local t = tick() * 2
         if State.RainbowFOV then
-            FOVCircle.Color = Color3.fromHSV(t%1,1,1)
+            FOVCircle.Color = Color3.fromHSV(t % 1, 1, 1)
         else
             FOVCircle.Color = Color3.fromRGB(255,255,255)
         end
-        FOVCircle.Radius = State.FOVRadius
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        FOVCircle.Radius = State.FOV
         FOVCircle.Visible = State.Aimbot or State.SilentAim
     end
-
-    if target and State.Aimbot then
-        local part = target.Character:FindFirstChild(State.LockPart)
-        if part then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, part.Position)
-        end
-    end
 end)
 
--- // Silent Aim Hook
-local old
-old = hookmetamethod(game,"__namecall",function(self,...)
-    local args = {...}
-    if State.SilentAim and getnamecallmethod()=="FireServer" then
+-- Aimbot (instant lock; you can plug smoothing if desired)
+RunService.RenderStepped:Connect(function()
+    if State.Aimbot then
         local target = getClosestTarget()
         if target and target.Character and target.Character:FindFirstChild(State.LockPart) then
-            args[2] = target.Character[State.LockPart].Position
-            return old(self, unpack(args))
-        end
-    end
-    return old(self,...)
-end)
-
--- // ESP + Team Tags
-local function createESP(plr)
-    if plr == LocalPlayer then return end
-    local box = Drawing.new("Square")
-    local name = Drawing.new("Text")
-
-    box.Thickness = 2
-    box.Filled = false
-    name.Size = 13
-    name.Center = true
-    name.Outline = true
-
-    RunService.RenderStepped:Connect(function()
-        if State.ESP and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = plr.Character.HumanoidRootPart
-            local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
-            if vis then
-                local scale = 2000 / (Camera.CFrame.Position - hrp.Position).Magnitude
-                box.Size = Vector2.new(scale, scale * 1.5)
-                box.Position = Vector2.new(pos.X - box.Size.X/2, pos.Y - box.Size.Y/2)
-                name.Position = Vector2.new(pos.X, pos.Y - box.Size.Y/1.2)
-                box.Color = State.TeamTags and (plr.Team and plr.Team.TeamColor.Color or State.ESPColor) or State.ESPColor
-                name.Color = box.Color
-                name.Text = plr.Name
-                box.Visible = true
-                name.Visible = true
-            else
-                box.Visible = false
-                name.Visible = false
+            local aimPart = target.Character[State.LockPart]
+            if aimPart then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPart.Position)
             end
-        else
-            box.Visible = false
-            name.Visible = false
-        end
-    end)
-end
-for _,plr in pairs(Players:GetPlayers()) do createESP(plr) end
-Players.PlayerAdded:Connect(createESP)
-
--- // Fly / NoClip / Invisible
-local BV, BG
-RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-
-    if hum then
-        hum.WalkSpeed = State.WalkSpeed
-        hum.JumpPower = State.JumpPower
-    end
-
-    if State.Fly and hrp then
-        if not BV then
-            BV = Instance.new("BodyVelocity", hrp)
-            BV.MaxForce = Vector3.new(1e5,1e5,1e5)
-            BG = Instance.new("BodyGyro", hrp)
-            BG.MaxTorque = Vector3.new(1e5,1e5,1e5)
-        end
-        local dir = Vector3.new()
-        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= Camera.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += Camera.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0,1,0) end
-        BV.Velocity = dir.Magnitude>0 and dir.Unit*State.FlySpeed or Vector3.zero
-        BG.CFrame = Camera.CFrame
-    elseif BV then
-        BV:Destroy() BG:Destroy()
-        BV,BG=nil,nil
-    end
-
-    if State.NoClip then
-        for _,v in pairs(char:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide=false end
-        end
-    end
-
-    if State.Invisible then
-        for _,v in pairs(char:GetDescendants()) do
-            if v:IsA("BasePart") then v.Transparency=1 end
         end
     end
 end)
+
+-- SilentAim: robust namecall hook replacing Vector3/CFrame/shallow table positions
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if State.SilentAim and method == "FireServer" then
+        local ok = pcall(function() return self:IsA and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) end)
+        if ok then
+            local target = getClosestTarget()
+            if target and target.Character and target.Character:FindFirstChild(State.LockPart) then
+                local targetPos = target.Character[State.LockPart].Position
+                for i = 1, #args do
+                    local v = args[i]
+                    local vt = typeof(v)
+                    if vt == "Vector3" then
+                        args[i] = targetPos
+                    elseif vt == "CFrame" then
+                        args[i] = CFrame.new(targetPos)
+                    elseif vt == "table" then
+                        -- shallow replace Vector3 values in table
+                        local changed = false
+                        for k2, v2 in pairs(v) do
+                            if typeof(v2) == "Vector3" then
+                                v[k2] = targetPos
+                                changed = true
+                            end
+                        end
+                        if changed then args[i] = v end
+                    end
+                end
+                return oldNamecall(self, unpack(args))
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- Keybind H: toggle LockPart between Head and HumanoidRootPart
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.H then
+            if State.LockPart == "Head" then
+                State.LockPart = "HumanoidRootPart"
+            else
+                State.LockPart = "Head"
+            end
+            -- feedback
+            pcall(function()
+                print("[COCO HUB] LockPart toggled ->", State.LockPart)
+            end)
+            -- If you have UI (ArrayField/Rayfield) and want to reflect change,
+            -- ensure your dropdown callback updates from State.LockPart
+        end
+    end
+end)
+
+-- Optional: if you have a UI dropdown, make sure it writes to State.LockPart.
+-- Example (ArrayField or Rayfield callback) should call:
+-- Callback=function(v) State.LockPart = v; print("LockPart set to", v) end
+
+print("COCO HUB (Aimbot+SilentAim) loaded. Default LockPart =", State.LockPart)
+print("Press H to toggle LockPart between Head and HumanoidRootPart")
