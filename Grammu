@@ -1,192 +1,166 @@
--- COCO HUB | Aimbot + SilentAim (TeamCheck + WallCheck + H-toggle LockPart)
--- Developer: Dechatorn x GPT-5 (updated)
--- Supports: KRNL / Delta / Xeno
+-- Load ArrayField library
+local ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/Refinement/main/MC%3AArrayfield%20Library"))()
 
--- Services
-local Players     = game:GetService("Players")
-local Workspace   = game:GetService("Workspace")
-local RunService  = game:GetService("RunService")
-local UIS         = game:GetService("UserInputService")
-local Camera      = Workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
+-- Create main window
+local Window = ArrayField:CreateWindow({
+    Name = "COCO HUB",
+    LoadingTitle = "COCO HUB",
+    LoadingSubtitle = "by COCO",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "COCOHUB",
+        FileName = "COCOHUB_Config"
+    }
+})
 
--- Settings / State
-local State = {
-    Aimbot = false,
-    SilentAim = false,
-    AutoShoot = false,
-    LockPart = "Head",        -- DEFAULT: Head
-    TeamCheck = true,
-    WallCheck = true,
-    FOV = 160,
-    RainbowFOV = true,
-}
+-- Create main tab
+local MainTab = Window:CreateTab("Main")
 
--- Drawing FOV (safe-guard if Drawing available)
-local canDraw = pcall(function() return Drawing.new("Circle") end)
-local FOVCircle
-if canDraw then
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = 2
-    FOVCircle.NumSides = 100
-    FOVCircle.Radius = State.FOV
-    FOVCircle.Filled = false
-    FOVCircle.Color = Color3.fromRGB(255,255,255)
-    FOVCircle.Visible = false
-end
+-- Create sections
+local AimbotSection = MainTab:CreateSection("Aimbot Settings")
+local VisualsSection = MainTab:CreateSection("Visuals")
+local MiscSection = MainTab:CreateSection("Miscellaneous")
+local ESPSection = MainTab:CreateSection("ESP") -- ESP section added
 
--- Utility: alive check
-local function isAlive(plr)
-    if not plr or not plr.Character then return false end
-    local h = plr.Character:FindFirstChildOfClass("Humanoid")
-    return h and h.Health and h.Health > 0
-end
-
--- Team check
-local function isTeammate(plr)
-    if not State.TeamCheck then return false end
-    if not plr or not LocalPlayer then return false end
-    if plr.Team and LocalPlayer.Team then
-        return plr.Team == LocalPlayer.Team
+-- Toggle for Aimbot
+local AimbotToggle = AimbotSection:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Callback = function(value)
+        State.Aimbot = value
     end
-    return false
+})
+
+-- Toggle for Silent Aim
+local SilentAimToggle = AimbotSection:CreateToggle({
+    Name = "Enable Silent Aim",
+    CurrentValue = false,
+    Callback = function(value)
+        State.SilentAim = value
+    end
+})
+
+-- Dropdown for Lock Part
+local LockPartDropdown = AimbotSection:CreateDropdown({
+    Name = "Lock Part",
+    Options = {"Head", "HumanoidRootPart"},
+    CurrentOption = "Head",
+    Callback = function(selected)
+        State.LockPart = selected
+    end
+})
+
+-- Slider for FOV radius
+local FOVSlider = AimbotSection:CreateSlider({
+    Name = "FOV Radius",
+    Range = {10, 360},
+    Increment = 1,
+    CurrentValue = 160,
+    Callback = function(value)
+        State.FOV = value
+    end
+})
+
+-- Toggle for Rainbow FOV
+local RainbowFOVToggle = AimbotSection:CreateToggle({
+    Name = "Rainbow FOV",
+    CurrentValue = true,
+    Callback = function(value)
+        State.RainbowFOV = value
+    end
+})
+
+-- Miscellaneous toggles
+local WallCheckToggle = MiscSection:CreateToggle({
+    Name = "Wall Check",
+    CurrentValue = true,
+    Callback = function(value)
+        State.WallCheck = value
+    end
+})
+
+local TeamCheckToggle = MiscSection:CreateToggle({
+    Name = "Team Check",
+    CurrentValue = true,
+    Callback = function(value)
+        State.TeamCheck = value
+    end
+})
+
+------------------------------------------------------
+-- ESP Section
+------------------------------------------------------
+
+-- Variables for ESP state and color
+local ESPEnabled = false
+local ESPColor = Color3.new(1, 0, 0) -- default red color
+
+-- Function to create ESP highlight for a player
+local function createESPForPlayer(player)
+    if not player.Character then return end
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESPHighlight"
+    highlight.Adornee = humanoidRootPart
+    highlight.Parent = player.Character
+    highlight.FillColor = ESPColor
+    highlight.OutlineColor = ESPColor
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = ESPEnabled
 end
 
--- Wall check using Raycast
-local function isVisible(part)
-    if not State.WallCheck then return true end
-    if not part then return false end
-    local origin = Camera.CFrame.Position
-    local direction = (part.Position - origin)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.IgnoreWater = true
-    local result = Workspace:Raycast(origin, direction, rayParams)
-    if not result then
-        return true
-    else
-        -- if hit the target part or something inside target's character, visible
-        if result.Instance and result.Instance:IsDescendantOf(part.Parent) then
-            return true
+-- Function to toggle ESP
+local function toggleESP(state)
+    ESPEnabled = state
+    for _, player in pairs(game.Players:GetPlayers()) do
+        local highlight = player.Character and player.Character:FindFirstChild("ESPHighlight")
+        if highlight then
+            highlight.Enabled = state
+        elseif state and player.Character then
+            createESPForPlayer(player)
         end
-        return false
     end
 end
 
--- Get closest target by screen distance inside FOV, with Team & Wall checks
-local function getClosestTarget()
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    local nearest, bestDist = nil, State.FOV
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and isAlive(plr) and (not isTeammate(plr)) then
-            local char = plr.Character
-            if char then
-                local part = char:FindFirstChild(State.LockPart)
-                if part and isVisible(part) then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                        if dist < bestDist then
-                            bestDist = dist
-                            nearest = plr
-                        end
-                    end
-                end
-            end
+-- Function to update ESP color
+local function updateESPColor(newColor)
+    ESPColor = newColor
+    for _, player in pairs(game.Players:GetPlayers()) do
+        local highlight = player.Character and player.Character:FindFirstChild("ESPHighlight")
+        if highlight then
+            highlight.FillColor = newColor
+            highlight.OutlineColor = newColor
         end
     end
-    return nearest
 end
 
--- Update FOV circle
-RunService.RenderStepped:Connect(function()
-    if FOVCircle then
-        local t = tick() * 2
-        if State.RainbowFOV then
-            FOVCircle.Color = Color3.fromHSV(t % 1, 1, 1)
-        else
-            FOVCircle.Color = Color3.fromRGB(255,255,255)
+-- When new players join, create ESP if enabled
+game.Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        if ESPEnabled then
+            createESPForPlayer(player)
         end
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        FOVCircle.Radius = State.FOV
-        FOVCircle.Visible = State.Aimbot or State.SilentAim
-    end
+    end)
 end)
 
--- Aimbot (instant lock; you can plug smoothing if desired)
-RunService.RenderStepped:Connect(function()
-    if State.Aimbot then
-        local target = getClosestTarget()
-        if target and target.Character and target.Character:FindFirstChild(State.LockPart) then
-            local aimPart = target.Character[State.LockPart]
-            if aimPart then
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPart.Position)
-            end
-        end
+-- UI toggle for ESP
+local ESPToggle = ESPSection:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = false,
+    Callback = function(value)
+        toggleESP(value)
     end
-end)
+})
 
--- SilentAim: robust namecall hook replacing Vector3/CFrame/shallow table positions
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    if State.SilentAim and method == "FireServer" then
-        local ok = pcall(function() return self:IsA and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) end)
-        if ok then
-            local target = getClosestTarget()
-            if target and target.Character and target.Character:FindFirstChild(State.LockPart) then
-                local targetPos = target.Character[State.LockPart].Position
-                for i = 1, #args do
-                    local v = args[i]
-                    local vt = typeof(v)
-                    if vt == "Vector3" then
-                        args[i] = targetPos
-                    elseif vt == "CFrame" then
-                        args[i] = CFrame.new(targetPos)
-                    elseif vt == "table" then
-                        -- shallow replace Vector3 values in table
-                        local changed = false
-                        for k2, v2 in pairs(v) do
-                            if typeof(v2) == "Vector3" then
-                                v[k2] = targetPos
-                                changed = true
-                            end
-                        end
-                        if changed then args[i] = v end
-                    end
-                end
-                return oldNamecall(self, unpack(args))
-            end
-        end
+-- UI color picker for ESP color (if supported by your UI framework)
+local ESPColorPicker = ESPSection:CreateColorPicker({
+    Name = "ESP Color",
+    CurrentColor = ESPColor,
+    Callback = function(newColor)
+        updateESPColor(newColor)
     end
-    return oldNamecall(self, ...)
-end)
+})
 
--- Keybind H: toggle LockPart between Head and HumanoidRootPart
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == Enum.KeyCode.H then
-            if State.LockPart == "Head" then
-                State.LockPart = "HumanoidRootPart"
-            else
-                State.LockPart = "Head"
-            end
-            -- feedback
-            pcall(function()
-                print("[COCO HUB] LockPart toggled ->", State.LockPart)
-            end)
-            -- If you have UI (ArrayField/Rayfield) and want to reflect change,
-            -- ensure your dropdown callback updates from State.LockPart
-        end
-    end
-end)
-
--- Optional: if you have a UI dropdown, make sure it writes to State.LockPart.
--- Example (ArrayField or Rayfield callback) should call:
--- Callback=function(v) State.LockPart = v; print("LockPart set to", v) end
-
-print("COCO HUB (Aimbot+SilentAim) loaded. Default LockPart =", State.LockPart)
-print("Press H to toggle LockPart between Head and HumanoidRootPart")
+-- Note: If your UI framework does not support ColorPicker, you can replace it with a dropdown or sliders for RGB values.
