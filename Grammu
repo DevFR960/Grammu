@@ -12,21 +12,28 @@ local Config = {
     Aimbot = false,
     AimPart = "Head",
     FOV = 200,
+    FOVVisible = true,
     TeamCheck = true,
     WallCheck = true,
     HitboxEnabled = false,
     HitboxSize = 10,
     WalkSpeed = 16,
-    JumpPower = 50,
     Fly = false,
     FlySpeed = 50,
     ESP = false
 }
 
---// Wall Check Function (Raycasting)
+--// FOV Circle Setup (Rainbow)
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 100
+FOVCircle.Radius = Config.FOV
+FOVCircle.Filled = false
+FOVCircle.Visible = Config.FOVVisible
+
+--// Wall Check Function
 local function IsVisible(targetPart)
     if not Config.WallCheck then return true end
-    
     local character = LocalPlayer.Character
     if not character then return false end
     
@@ -39,37 +46,30 @@ local function IsVisible(targetPart)
     rayParams.FilterDescendantsInstances = {character, Camera}
     
     local result = workspace:Raycast(origin, direction, rayParams)
-    
-    -- If the ray hits nothing or hits the target's character, it's visible
-    if not result or result.Instance:IsDescendantOf(targetPart.Parent) then
-        return true
-    end
-    return false
+    return not result or result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
---// Get Closest Target with Checks
+--// Get Closest Target
 local function GetClosestTarget()
     local target = nil
     local shortestDistance = Config.FOV
 
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local part = player.Character:FindFirstChild(Config.AimPart)
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
+            -- เช็คทีมและเลือด
+            if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
+            if player.Character.Humanoid.Health <= 0 then continue end
             
-            if humanoid and part and humanoid.Health > 0 then
-                -- 1. Team Check
-                if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
-                
+            local part = player.Character:FindFirstChild(Config.AimPart)
+            if part then
                 local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    -- 2. Wall Check
-                    if IsVisible(part) then
-                        local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                        if magnitude < shortestDistance then
-                            target = part
-                            shortestDistance = magnitude
-                        end
+                if onScreen and IsVisible(part) then
+                    local mousePos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                    local magnitude = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    
+                    if magnitude < shortestDistance then
+                        target = part
+                        shortestDistance = magnitude
                     end
                 end
             end
@@ -80,8 +80,8 @@ end
 
 --// UI Setup
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB | ADVANCED V3",
-    LoadingTitle = "Initializing Pro Functions...",
+    Name = "COCO HUB | ALL-IN-ONE V4",
+    LoadingTitle = "Merging Modules...",
     ConfigurationSaving = {Enabled = false}
 })
 
@@ -90,23 +90,17 @@ local VisualTab = Window:CreateTab("Visuals")
 local MovementTab = Window:CreateTab("Movement")
 
 --// Combat Section
-CombatTab:CreateSection("Aimbot Settings")
+CombatTab:CreateSection("Aimbot & FOV")
 CombatTab:CreateToggle({
-    Name = "Enable Aimbot",
+    Name = "Enable Aimbot (Right Click)",
     CurrentValue = false,
     Callback = function(v) Config.Aimbot = v end
 })
 
 CombatTab:CreateToggle({
-    Name = "Team Check",
+    Name = "Show Rainbow FOV",
     CurrentValue = true,
-    Callback = function(v) Config.TeamCheck = v end
-})
-
-CombatTab:CreateToggle({
-    Name = "Wall Check (Visibility)",
-    CurrentValue = true,
-    Callback = function(v) Config.WallCheck = v end
+    Callback = function(v) Config.FOVVisible = v end
 })
 
 CombatTab:CreateSlider({
@@ -114,14 +108,30 @@ CombatTab:CreateSlider({
     Range = {50, 800},
     Increment = 1,
     CurrentValue = 200,
-    Callback = function(v) Config.FOV = v end
+    Callback = function(v) 
+        Config.FOV = v 
+        FOVCircle.Radius = v
+    end
 })
 
 CombatTab:CreateSection("Hitbox Settings")
 CombatTab:CreateToggle({
     Name = "Hitbox Expander",
     CurrentValue = false,
-    Callback = function(v) Config.HitboxEnabled = v end
+    Callback = function(v) 
+        Config.HitboxEnabled = v 
+        if not v then
+            -- Reset Hitboxes เมื่อปิด
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = p.Character.HumanoidRootPart
+                    hrp.Size = Vector3.new(2, 2, 1)
+                    hrp.Transparency = 1
+                    hrp.CanCollide = true
+                end
+            end
+        end
+    end
 })
 
 CombatTab:CreateSlider({
@@ -134,7 +144,7 @@ CombatTab:CreateSlider({
 
 --// Visuals Section
 VisualTab:CreateToggle({
-    Name = "Player Highlights (ESP)",
+    Name = "Player ESP",
     CurrentValue = false,
     Callback = function(v) 
         Config.ESP = v 
@@ -157,28 +167,26 @@ MovementTab:CreateSlider({
     Callback = function(v) Config.WalkSpeed = v end
 })
 
-MovementTab:CreateToggle({
-    Name = "Flight Mode",
-    CurrentValue = false,
-    Callback = function(v) Config.Fly = v end
-})
-
---// Main Processor Loop
+--// Main Update Loop
 RunService.RenderStepped:Connect(function()
-    -- 1. Aimbot Logic
-    if Config.Aimbot then
+    -- 1. Rainbow FOV Logic
+    if Config.FOVVisible then
+        FOVCircle.Visible = true
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1) 
+    else
+        FOVCircle.Visible = false
+    end
+
+    -- 2. Aimbot Logic (ล็อคเมื่อกดคลิกขวา)
+    if Config.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = GetClosestTarget()
         if target then
             Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
         end
     end
 
-    -- 2. Character Physics
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
-    end
-
-    -- 3. Hitbox Modification
+    -- 3. Hitbox Update
     if Config.HitboxEnabled then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -191,36 +199,26 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- 4. ESP Update
-    if Config.ESP then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                if not p.Character:FindFirstChild("CocoESP") then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "CocoESP"
-                    hl.FillColor = Color3.fromRGB(255, 0, 0)
-                    hl.Parent = p.Character
-                end
-            end
-        end
+    -- 4. Speed Logic
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
     end
 
-    -- 5. Flight Logic
-    if Config.Fly and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local hrp = LocalPlayer.Character.HumanoidRootPart
-        local moveDir = Vector3.new(0,0,0)
-        
-        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= Camera.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
-        
-        hrp.Velocity = moveDir * Config.FlySpeed
+    -- 5. ESP Logic
+    if Config.ESP then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and not p.Character:FindFirstChild("CocoESP") then
+                local hl = Instance.new("Highlight")
+                hl.Name = "CocoESP"
+                hl.FillColor = Color3.fromRGB(255, 0, 0)
+                hl.Parent = p.Character
+            end
+        end
     end
 end)
 
 Rayfield:Notify({
-    Title = "COCO HUB LOADED",
-    Content = "English Advanced Edition Ready.",
+    Title = "COCO HUB COMPLETED",
+    Content = "All features merged and fixed!",
     Duration = 5
 })
