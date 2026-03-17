@@ -1,63 +1,75 @@
---// Prevent Multiple Executions
-if getgenv().CocoHubLoaded then 
-    Rayfield:Notify({Title = "Notice", Content = "Script is already running!", Duration = 3})
-    return 
-end
-getgenv().CocoHubLoaded = true
-
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
---// Load Rayfield Library
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-end)
+--// Load Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLTD/Rayfield/main/source.lua'))()
 
-if not success then return end
-
---// Script Settings
+--// Configuration Settings
 local Config = {
     Aimbot = false,
-    SilentAim = false,
-    AimbotPart = "Head",
-    FOV = 100,
-    Fly = false,
-    FlySpeed = 50,
+    AimPart = "Head",
+    FOV = 200,
+    TeamCheck = true,
+    WallCheck = true,
+    HitboxEnabled = false,
+    HitboxSize = 10,
     WalkSpeed = 16,
     JumpPower = 50,
-    HitboxSize = 2,
-    ESP = false,
-    TeamCheck = false
+    Fly = false,
+    FlySpeed = 50,
+    ESP = false
 }
 
---// FOV Circle Setup
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 2
-FOVCircle.NumSides = 60
-FOVCircle.Filled = false
-FOVCircle.Transparency = 1
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+--// Wall Check Function (Raycasting)
+local function IsVisible(targetPart)
+    if not Config.WallCheck then return true end
+    
+    local character = LocalPlayer.Character
+    if not character then return false end
+    
+    local origin = Camera.CFrame.Position
+    local destination = targetPart.Position
+    local direction = (destination - origin).Unit * (destination - origin).Magnitude
+    
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {character, Camera}
+    
+    local result = workspace:Raycast(origin, direction, rayParams)
+    
+    -- If the ray hits nothing or hits the target's character, it's visible
+    if not result or result.Instance:IsDescendantOf(targetPart.Parent) then
+        return true
+    end
+    return false
+end
 
---// Functions
+--// Get Closest Target with Checks
 local function GetClosestTarget()
     local target = nil
     local shortestDistance = Config.FOV
 
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character:FindFirstChild(Config.AimbotPart) then
-            if v.Character.Humanoid.Health > 0 then
-                -- Team Check Logic
-                if Config.TeamCheck and v.Team == LocalPlayer.Team then continue end
-
-                local pos, onScreen = Camera:WorldToViewportPoint(v.Character[Config.AimbotPart].Position)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local part = player.Character:FindFirstChild(Config.AimPart)
+            
+            if humanoid and part and humanoid.Health > 0 then
+                -- 1. Team Check
+                if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
+                
+                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
                 if onScreen then
-                    local distance = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
-                    if distance < shortestDistance then
-                        target = v
-                        shortestDistance = distance
+                    -- 2. Wall Check
+                    if IsVisible(part) then
+                        local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                        if magnitude < shortestDistance then
+                            target = part
+                            shortestDistance = magnitude
+                        end
                     end
                 end
             end
@@ -66,57 +78,70 @@ local function GetClosestTarget()
     return target
 end
 
---// UI Window
+--// UI Setup
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB | Universal",
-    LoadingTitle = "Loading COCO HUB...",
-    LoadingSubtitle = "Created by Dechatorn",
+    Name = "COCO HUB | ADVANCED V3",
+    LoadingTitle = "Initializing Pro Functions...",
     ConfigurationSaving = {Enabled = false}
 })
 
---// Tabs
 local CombatTab = Window:CreateTab("Combat")
 local VisualTab = Window:CreateTab("Visuals")
 local MovementTab = Window:CreateTab("Movement")
 
 --// Combat Section
+CombatTab:CreateSection("Aimbot Settings")
 CombatTab:CreateToggle({
-    Name = "Aimbot (Camera Lock)",
+    Name = "Enable Aimbot",
     CurrentValue = false,
     Callback = function(v) Config.Aimbot = v end
 })
 
 CombatTab:CreateToggle({
-    Name = "Silent Aim",
-    CurrentValue = false,
-    Callback = function(v) Config.SilentAim = v end
+    Name = "Team Check",
+    CurrentValue = true,
+    Callback = function(v) Config.TeamCheck = v end
 })
 
-CombatTab:CreateDropdown({
-    Name = "Target Part",
-    Options = {"Head", "HumanoidRootPart"},
-    CurrentOption = "Head",
-    Callback = function(v) Config.AimbotPart = v end
+CombatTab:CreateToggle({
+    Name = "Wall Check (Visibility)",
+    CurrentValue = true,
+    Callback = function(v) Config.WallCheck = v end
 })
 
 CombatTab:CreateSlider({
-    Name = "Field of View (FOV)",
-    Range = {30, 800},
+    Name = "Aimbot FOV",
+    Range = {50, 800},
     Increment = 1,
-    CurrentValue = 100,
+    CurrentValue = 200,
     Callback = function(v) Config.FOV = v end
+})
+
+CombatTab:CreateSection("Hitbox Settings")
+CombatTab:CreateToggle({
+    Name = "Hitbox Expander",
+    CurrentValue = false,
+    Callback = function(v) Config.HitboxEnabled = v end
+})
+
+CombatTab:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {2, 50},
+    Increment = 1,
+    CurrentValue = 10,
+    Callback = function(v) Config.HitboxSize = v end
 })
 
 --// Visuals Section
 VisualTab:CreateToggle({
-    Name = "Player ESP (Highlights)",
+    Name = "Player Highlights (ESP)",
     CurrentValue = false,
     Callback = function(v) 
         Config.ESP = v 
         if not v then
             for _, p in pairs(Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChild("CocoHighlight") then
-                    p.Character.CocoHighlight:Destroy()
+                if p.Character and p.Character:FindFirstChild("CocoESP") then
+                    p.Character.CocoESP:Destroy()
                 end
             end
         end
@@ -125,16 +150,11 @@ VisualTab:CreateToggle({
 
 --// Movement Section
 MovementTab:CreateSlider({
-    Name = "WalkSpeed",
+    Name = "Walk Speed",
     Range = {16, 250},
     Increment = 1,
     CurrentValue = 16,
-    Callback = function(v)
-        Config.WalkSpeed = v
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.WalkSpeed = v
-        end
-    end
+    Callback = function(v) Config.WalkSpeed = v end
 })
 
 MovementTab:CreateToggle({
@@ -143,80 +163,64 @@ MovementTab:CreateToggle({
     Callback = function(v) Config.Fly = v end
 })
 
---// HOOKS (Silent Aim Logic)
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-
-    if Config.SilentAim and method == "FireServer" then
-        -- Common Remote names: "HitPart", "Shoot", "UpdateMouse"
-        if tostring(self) == "HitPart" or tostring(self) == "Shoot" then
-            local target = GetClosestTarget()
-            if target and target.Character then
-                args[1] = target.Character[Config.AimbotPart]
-                args[2] = target.Character[Config.AimbotPart].Position
-                return oldNamecall(self, unpack(args))
-            end
-        end
-    end
-    return oldNamecall(self, ...)
-end)
-
---// Main Render Loop
+--// Main Processor Loop
 RunService.RenderStepped:Connect(function()
-    -- Update FOV Circle
-    FOVCircle.Visible = Config.Aimbot or Config.SilentAim
-    FOVCircle.Radius = Config.FOV
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
-
-    -- Aimbot Camera Lock
+    -- 1. Aimbot Logic
     if Config.Aimbot then
         local target = GetClosestTarget()
-        if target and target.Character then
-            local targetPos = target.Character[Config.AimbotPart].Position
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
+        if target then
+            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
         end
     end
-    
-    -- ESP Logic
-    if Config.ESP then
+
+    -- 2. Character Physics
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
+    end
+
+    -- 3. Hitbox Modification
+    if Config.HitboxEnabled then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local hl = p.Character:FindFirstChild("CocoHighlight") or Instance.new("Highlight", p.Character)
-                hl.Name = "CocoHighlight"
-                hl.FillColor = Color3.fromRGB(255, 0, 0)
-                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                local hrp = p.Character.HumanoidRootPart
+                hrp.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+                hrp.Transparency = 0.7
+                hrp.BrickColor = BrickColor.new("Bright red")
+                hrp.CanCollide = false
             end
         end
     end
-end)
 
---// Flight & Physics Loop
-RunService.Heartbeat:Connect(function()
+    -- 4. ESP Update
+    if Config.ESP then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                if not p.Character:FindFirstChild("CocoESP") then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "CocoESP"
+                    hl.FillColor = Color3.fromRGB(255, 0, 0)
+                    hl.Parent = p.Character
+                end
+            end
+        end
+    end
+
+    -- 5. Flight Logic
     if Config.Fly and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = LocalPlayer.Character.HumanoidRootPart
         local moveDir = Vector3.new(0,0,0)
         
-        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
         
         hrp.Velocity = moveDir * Config.FlySpeed
     end
 end)
 
---// Auto-Apply on Respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid")
-    task.wait(0.5)
-    hum.WalkSpeed = Config.WalkSpeed
-end)
-
 Rayfield:Notify({
-    Title = "Successfully Loaded",
-    Content = "COCO HUB English Edition is ready.",
+    Title = "COCO HUB LOADED",
+    Content = "English Advanced Edition Ready.",
     Duration = 5
 })
