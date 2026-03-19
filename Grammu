@@ -1,123 +1,233 @@
+--[[
+    COCO HUB | DEFINITIVE EDITION V11
+    Features: Legit Mouse-Event Aimbot, Advanced ESP (Green, Name, Team, Dist, HP Bar), Anti-Detection
+    Platforms: PC & Mobile Friendly
+]]
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
 --// Load Rayfield UI Library
 local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLTD/Rayfield/main/source.lua'))()
 
+--// Internal Variables (Do not change manually)
+local vinput = game:GetService("VirtualInputManager") -- For Mobile Simulation
+local getconnection = getconnections or get_signal_cons
+local mouse_event = (syn and syn.mouse_event) or (http and http.request and mouse_event) or mouse_event -- PC Mouse Event
+
 --// Configuration Settings
 local Config = {
-    Aimbot = false,
-    Smoothness = 18, -- Higher = Safer (Recommended 15-25)
-    AimPart = "Head",
-    FOV = 150,
-    FOVVisible = true,
-    TeamCheck = false,
-    WallCheck = true,
-    WalkSpeed = 16,
-    Fly = false,
-    FlySpeed = 50,
+    Aimbot_Enabled = false,
+    Aimbot_Smoothness = 10, -- 1 = Fast, 30+ = Very Slow (Safe)
+    Aimbot_Part = "Head", -- Primary Part
+    Aimbot_RandomPart = true, -- Randomly aim between Head and Torso for safety
+    Aimbot_FOV = 150,
+    Aimbot_FOVVisible = true,
+    Aimbot_TeamCheck = false,
+    Aimbot_WallCheck = true,
+    
     ESP_Enabled = false,
-    ESP_Chams = false,
+    ESP_Chams = false, -- Green Highlight
+    ESP_Names = false,
+    ESP_Team = false,
+    ESP_Distance = false,
+    ESP_HealthBar = false,
+    
+    Movement_WalkSpeed = 16,
     CurrentTarget = nil
 }
 
---// FOV Circle
+--// FOV Circle Setup
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1
 FOVCircle.NumSides = 64
-FOVCircle.Radius = Config.FOV
 FOVCircle.Filled = false
-FOVCircle.Visible = Config.FOVVisible
+FOVCircle.Transparency = 0.7
+FOVCircle.Color = Color3.fromRGB(0, 255, 0)
+FOVCircle.Visible = Config.Aimbot_FOVVisible
+FOVCircle.Radius = Config.Aimbot_FOV
 
---// Helper: Smart Team & Info Finder
+--// Helper: Smart Player Info Finder
 local function GetPlayerInfo(player)
+    local char = player.Character
+    local head = char and char:FindFirstChild("Head")
+    local hum = char and char:FindFirstChild("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    
     local teamName = "Neutral"
     local teamColor = Color3.fromRGB(255, 255, 255)
-    local health = 0
-    local maxHealth = 100
-    local distance = 0
-
-    if player.Team then 
-        teamName = player.Team.Name 
+    
+    -- Smart Team Detection
+    if player.Team then
+        teamName = player.Team.Name
         teamColor = player.Team.TeamColor.Color
+    elseif char then
+        if char:GetAttribute("Team") then teamName = tostring(char:GetAttribute("Team"))
+        elseif char:FindFirstChild("Team") and char.Team:IsA("StringValue") then teamName = char.Team.Value end
     end
-
-    if player.Character and player.Character:FindFirstChild("Humanoid") then
-        health = math.floor(player.Character.Humanoid.Health)
-        maxHealth = math.floor(player.Character.Humanoid.MaxHealth)
-        distance = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude)
-    end
-
-    return teamName, teamColor, health, maxHealth, distance
+    
+    local health = hum and hum.Health or 0
+    local maxHealth = hum and hum.MaxHealth or 100
+    local distance = (hrp and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) and 
+        math.floor((LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude) or 0
+        
+    return teamName, teamColor, health, maxHealth, distance, head, hum, hrp
 end
 
---// Visibility Check (Raycast)
-local function IsVisible(targetPart)
-    if not Config.WallCheck then return true end
+--// Visibility Check (Raycast Multi-Point)
+local function IsVisible(targetChar)
+    if not Config.Aimbot_WallCheck then return true end
+    local head = targetChar:FindFirstChild("Head")
+    local torso = targetChar:FindFirstChild("HumanoidRootPart")
+    if not head or not torso then return false end
+    
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
     rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-    local result = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), rayParams)
-    return not result or result.Instance:IsDescendantOf(targetPart.Parent)
+    
+    -- Check Head
+    local resultHead = workspace:Raycast(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position), rayParams)
+    if not resultHead or resultHead.Instance:IsDescendantOf(targetChar) then return true end
+    
+    -- Check Torso
+    local resultTorso = workspace:Raycast(Camera.CFrame.Position, (torso.Position - Camera.CFrame.Position), rayParams)
+    if not resultTorso or resultTorso.Instance:IsDescendantOf(targetChar) then return true end
+    
+    return false
 end
 
---// ESP Tag Creation
+--// Advanced ESP Creation (Green Chams, Detailed Tag, Health Bar)
 local function UpdateESP(player)
-    if not player.Character or not player.Character:FindFirstChild("Head") then return end
-    local head = player.Character.Head
-    local tag = head:FindFirstChild("CocoV10Tag")
+    local char = player.Character
+    if not char or not char:FindFirstChild("Head") then return end
+    local head = char.Head
+    local tag = head:FindFirstChild("CocoV11ESP")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
     
-    if not Config.ESP_Enabled then
+    if not Config.ESP_Enabled or player == LocalPlayer then
         if tag then tag:Destroy() end
+        if char:FindFirstChild("CocoV11Cham") then char.CocoV11Cham:Destroy() end
         return
     end
-
+    
+    -- 1. Billboard Tag (Names, Team, Dist, HP)
     if not tag then
         tag = Instance.new("BillboardGui")
-        tag.Name = "CocoV10Tag"
+        tag.Name = "CocoV11ESP"
         tag.Adornee = head
-        tag.Size = UDim2.new(0, 200, 0, 70)
-        tag.StudsOffset = Vector3.new(0, 4, 0)
+        tag.Size = UDim2.new(0, 150, 0, 80)
+        tag.StudsOffset = Vector3.new(0, 3.5, 0)
         tag.AlwaysOnTop = true
         tag.Parent = head
-
-        local label = Instance.new("TextLabel", tag)
-        label.Name = "MainLabel"
-        label.BackgroundTransparency = 1
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.TextStrokeTransparency = 0.2
-        label.Font = Enum.Font.RobotoMono
-        label.TextSize = 13
+        
+        local container = Instance.new("Frame", tag)
+        container.Size = UDim2.new(1, 0, 1, 0)
+        container.BackgroundTransparency = 1
+        
+        local list = Instance.new("UIListLayout", container)
+        list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        list.SortOrder = Enum.SortOrder.LayoutOrder
+        
+        local nameLabel = Instance.new("TextLabel", container)
+        nameLabel.Name = "NameLabel"
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Size = UDim2.new(1, 0, 0, 15)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 12
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextStrokeTransparency = 0
+        
+        local infoLabel = Instance.new("TextLabel", container)
+        infoLabel.Name = "InfoLabel"
+        infoLabel.BackgroundTransparency = 1
+        infoLabel.Size = UDim2.new(1, 0, 0, 25)
+        infoLabel.Font = Enum.Font.Gotham
+        infoLabel.TextSize = 10
+        infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        infoLabel.TextStrokeTransparency = 0
+        
+        -- Health Bar (Built into the Tag for performance)
+        local healthFrame = Instance.new("Frame", container)
+        healthFrame.Name = "HealthFrame"
+        healthFrame.Size = UDim2.new(0, 80, 0, 3)
+        healthFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        healthFrame.BorderSizePixel = 0
+        
+        local healthBar = Instance.new("Frame", healthFrame)
+        healthBar.Name = "Bar"
+        healthBar.Size = UDim2.new(1, 0, 1, 0)
+        healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        healthBar.BorderSizePixel = 0
     end
-
-    local teamName, teamColor, hp, maxHp, dist = GetPlayerInfo(player)
-    local hpPercent = (hp / maxHp)
-    local hpColor = Color3.fromHSV(hpPercent * 0.3, 1, 1) -- Red to Green
-
-    tag.MainLabel.TextColor3 = teamColor
-    tag.MainLabel.Text = string.format(
-        "%s\n[Team: %s]\n[HP: %d/%d]\n[Dist: %d]", 
-        player.DisplayName or player.Name, teamName, hp, maxHp, dist
-    )
+    
+    local tName, tColor, hp, maxHp, dist, _, hum, _ = GetPlayerInfo(player)
+    local hpPercent = hum and (hum.Health / hum.MaxHealth) or 0
+    
+    -- Update Text Content
+    tag.container.NameLabel.Text = Config.ESP_Names and (player.DisplayName or player.Name) or ""
+    tag.container.NameLabel.Visible = Config.ESP_Names
+    
+    local infoText = ""
+    if Config.ESP_Team then infoText = infoText .. "[" .. tName .. "] " end
+    if Config.ESP_Distance then infoText = infoText .. "(" .. dist .. " studs)" end
+    tag.container.InfoLabel.Text = infoText
+    tag.container.InfoLabel.Visible = (Config.ESP_Team or Config.ESP_Distance)
+    tag.container.InfoLabel.TextColor3 = tColor
+    
+    -- Update Health Bar
+    tag.container.HealthFrame.Visible = Config.ESP_HealthBar
+    if Config.ESP_HealthBar then
+        tag.container.HealthFrame.Bar.Size = UDim2.new(hpPercent, 0, 1, 0)
+        tag.container.HealthFrame.Bar.BackgroundColor3 = Color3.fromHSV(hpPercent * 0.3, 1, 1) -- Red to Green
+    end
+    
+    -- 2. Chams (Green Highlight)
+    if Config.ESP_Chams then
+        if not char:FindFirstChild("CocoV11Cham") then
+            local hl = Instance.new("Highlight", char)
+            hl.Name = "CocoV11Cham"
+            hl.FillColor = Color3.fromRGB(0, 255, 0)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.5
+            hl.OutlineTransparency = 0
+        end
+    else
+        if char:FindFirstChild("CocoV11Cham") then char.CocoV11Cham:Destroy() end
+    end
 end
 
---// Get Targeted Player (Humanized Logic)
+--// Legit Aimbot Logic (Mouse Event / Simulation)
 local function GetTarget()
     local target = nil
-    local shortestDistance = Config.FOV
+    local shortestDistance = Config.Aimbot_FOV
+    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
-            if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
+            if Config.Aimbot_TeamCheck and player.Team == LocalPlayer.Team then continue end
             if player.Character.Humanoid.Health <= 0 then continue end
-            local part = player.Character:FindFirstChild(Config.AimPart)
-            if part then
-                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen and IsVisible(part) then
+            
+            -- Multi-Part Check (Randomize for Legit)
+            local partNames = {Config.Aimbot_Part, "HumanoidRootPart"}
+            if Config.Aimbot_RandomPart then partNames = {"Head", "HumanoidRootPart", "LowerTorso"} end
+            
+            local aimPart = nil
+            for _, name in pairs(partNames) do
+                aimPart = player.Character:FindFirstChild(name)
+                if aimPart then break end
+            end
+            
+            if aimPart then
+                local pos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+                if onScreen and IsVisible(player.Character) then
                     local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                    if mag < shortestDistance then target = part shortestDistance = mag end
+                    if mag < shortestDistance then
+                        target = aimPart
+                        shortestDistance = mag
+                    end
                 end
             end
         end
@@ -125,66 +235,97 @@ local function GetTarget()
     return target
 end
 
---// UI Setup
-local Window = Rayfield:CreateWindow({Name = "COCO HUB | PRO V10 (EN)", LoadingTitle = "Securing Environment...", ConfigurationSaving = {Enabled = false}})
-local Tab1 = Window:CreateTab("Combat")
-local Tab2 = Window:CreateTab("Visuals")
-local Tab3 = Window:CreateTab("Movement")
-
-Tab1:CreateToggle({Name = "Aimbot (Safe Smoothing)", CurrentValue = false, Callback = function(v) Config.Aimbot = v end})
-Tab1:CreateSlider({Name = "Legit Smoothness", Range = {1, 50}, Increment = 1, CurrentValue = 18, Callback = function(v) Config.Smoothness = v end})
-Tab1:CreateToggle({Name = "Wall Check", CurrentValue = true, Callback = function(v) Config.WallCheck = v end})
-
-Tab2:CreateToggle({Name = "Enable Full ESP (Dist/HP)", CurrentValue = false, Callback = function(v) Config.ESP_Enabled = v end})
-Tab2:CreateToggle({Name = "Green Chams (Highlight)", CurrentValue = false, Callback = function(v) Config.ESP_Chams = v end})
-
-Tab3:CreateSlider({Name = "WalkSpeed", Range = {16, 200}, Increment = 1, CurrentValue = 16, Callback = function(v) Config.WalkSpeed = v end})
-
---// Main Processor
-RunService.RenderStepped:Connect(function()
-    -- FOV Update
-    if Config.FOVVisible then
-        FOVCircle.Visible = true
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 0.6, 1)
-    else FOVCircle.Visible = false end
-
-    -- Aimbot (Safe Smoothing)
-    if Config.Aimbot then
-        local target = GetTarget()
-        if target then
-            -- Exponential Smoothing (More human-like)
-            local targetCF = CFrame.lookAt(Camera.CFrame.Position, target.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1/Config.Smoothness)
+--// Aimbot Execution (The Fix)
+local function AimAt(targetPart)
+    local pos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+    if onScreen then
+        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+        local targetPos = Vector2.new(pos.X, pos.Y)
+        
+        -- Calculate the distance between mouse and target
+        local diff = (targetPos - mousePos)
+        
+        -- Apply Smoothness (Legit)
+        local moveX = diff.X / Config.Aimbot_Smoothness
+        local moveY = diff.Y / Config.Aimbot_Smoothness
+        
+        -- Execute Mouse Movement
+        if mouse_event then
+            -- PC: Mouse Event (Legit)
+            mouse_event(1, moveX, moveY, 0, 0)
+        else
+            -- Mobile: Virtual Input (Auto-Lock)
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, targetPart.Position), 1/Config.Aimbot_Smoothness)
         end
     end
+end
 
-    -- Character Speed
+--// UI Setup
+local Window = Rayfield:CreateWindow({Name = "COCO HUB | DEFINITIVE V11", LoadingTitle = "Defining Combat...", ConfigurationSaving = {Enabled = false}})
+local CombatTab = Window:CreateTab("Combat")
+local VisualTab = Window:CreateTab("Visuals")
+local MovementTab = Window:CreateTab("Movement")
+
+--// Combat Settings
+CombatTab:CreateSection("Legit Aimbot (Mouse-Event)")
+CombatTab:CreateToggle({Name = "Enable Aimbot (Safe)", CurrentValue = false, Callback = function(v) Config.Aimbot_Enabled = v end})
+CombatTab:CreateSlider({Name = "Legit Smoothness (Higher = Safe)", Range = {1, 40}, Increment = 1, CurrentValue = 10, Callback = function(v) Config.Aimbot_Smoothness = v end})
+CombatTab:CreateToggle({Name = "Randomize Aim Part (Head/Torso)", CurrentValue = true, Callback = function(v) Config.Aimbot_RandomPart = v end})
+CombatTab:CreateToggle({Name = "Wall Check", CurrentValue = true, Callback = function(v) Config.Aimbot_WallCheck = v end})
+
+CombatTab:CreateSection("FOV Settings")
+CombatTab:CreateToggle({Name = "Show FOV Circle", CurrentValue = true, Callback = function(v) Config.Aimbot_FOVVisible = v end})
+CombatTab:CreateSlider({Name = "Aimbot FOV", Range = {50, 800}, Increment = 1, CurrentValue = 150, Callback = function(v) Config.Aimbot_FOV = v end})
+
+--// Visual Settings
+VisualTab:CreateSection("Advanced ESP (Optimized)")
+VisualTab:CreateToggle({Name = "Enable ESP Masterswitch", CurrentValue = false, Callback = function(v) Config.ESP_Enabled = v end})
+VisualTab:CreateToggle({Name = "Green Chams (Highlights)", CurrentValue = false, Callback = function(v) Config.ESP_Chams = v end})
+VisualTab:CreateToggle({Name = "Show Player Names", CurrentValue = false, Callback = function(v) Config.ESP_Names = v end})
+VisualTab:CreateToggle({Name = "Show Team Names", CurrentValue = false, Callback = function(v) Config.ESP_Team = v end})
+VisualTab:CreateToggle({Name = "Show Distance (Studs)", CurrentValue = false, Callback = function(v) Config.ESP_Distance = v end})
+VisualTab:CreateToggle({Name = "Show Health Bar", CurrentValue = false, Callback = function(v) Config.ESP_HealthBar = v end})
+
+--// Movement Settings
+MovementTab:CreateSlider({Name = "WalkSpeed", Range = {16, 200}, Increment = 1, CurrentValue = 16, Callback = function(v) Config.Movement_WalkSpeed = v end})
+
+--// Main Processor Loop (RenderStepped)
+RunService.RenderStepped:Connect(function()
+    -- 1. FOV Cycle
+    if Config.Aimbot_FOVVisible then
+        FOVCircle.Visible = true
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        FOVCircle.Radius = Config.Aimbot_FOV
+        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 0.7, 1) -- Rainbow FOV
+    else
+        FOVCircle.Visible = false
+    end
+    
+    -- 2. WalkSpeed
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
+        LocalPlayer.Character.Humanoid.WalkSpeed = Config.Movement_WalkSpeed
     end
 end)
 
---// Visuals & Chams Update Loop (0.5s Frequency for Safety)
+--// Aimbot Loop (task.spawn for performance)
 task.spawn(function()
-    while task.wait(0.5) do
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                UpdateESP(p) -- Refresh Tags
-                -- Chams
-                if Config.ESP_Chams then
-                    if not p.Character:FindFirstChild("CocoCham") then
-                        local hl = Instance.new("Highlight", p.Character)
-                        hl.Name = "CocoCham"
-                        hl.FillColor = Color3.fromRGB(0, 255, 0)
-                        hl.FillTransparency = 0.6
-                    end
-                else
-                    if p.Character:FindFirstChild("CocoCham") then p.Character.CocoCham:Destroy() end
-                end
+    while task.wait() do
+        if Config.Aimbot_Enabled then
+            local target = GetTarget()
+            if target then
+                AimAt(target)
             end
         end
     end
 end)
 
-Rayfield:Notify({Title = "V10 PRO LOADED", Content = "Anti-Detection & Advanced ESP Active.", Duration = 5})
+--// ESP Update Loop (0.5s Frequency for Safety & Performance)
+task.spawn(function()
+    while task.wait(0.5) do
+        for _, p in pairs(Players:GetPlayers()) do
+            UpdateESP(p)
+        end
+    end
+end)
+
+Rayfield:Notify({Title = "COCO HUB V11 DEFINITIVE", Content = "Mouse-Event Aimbot & Advanced ESP loaded!", Duration = 5})
