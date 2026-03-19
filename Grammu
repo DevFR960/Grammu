@@ -10,53 +10,63 @@ local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/Siri
 --// Configuration Settings
 local Config = {
     Aimbot = false,
+    Smoothness = 15, -- ยิ่งเยอะยิ่งเนียน (แนะนำ 10-20)
     AimPart = "Head",
-    FOV = 200,
+    FOV = 150,
     FOVVisible = true,
     TeamCheck = true,
     WallCheck = true,
     HitboxEnabled = false,
-    HitboxSize = 10,
+    HitboxSize = 5, -- ปรับให้ไม่ใหญ่เกินไปเพื่อความเนียน
     WalkSpeed = 16,
     Fly = false,
     FlySpeed = 50,
-    ESP = false
+    ESP = false,
+    CurrentTarget = nil -- ระบบ Lock เป้าเดี่ยว
 }
 
---// FOV Circle Setup (Rainbow)
+--// FOV Circle (Rainbow)
 local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 2
-FOVCircle.NumSides = 100
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 64
 FOVCircle.Radius = Config.FOV
 FOVCircle.Filled = false
 FOVCircle.Visible = Config.FOVVisible
 
---// Wall Check Function
+--// Legit Visibility Check
 local function IsVisible(targetPart)
     if not Config.WallCheck then return true end
-    local character = LocalPlayer.Character
-    if not character then return false end
-    
     local origin = Camera.CFrame.Position
     local destination = targetPart.Position
-    local direction = (destination - origin).Unit * (destination - origin).Magnitude
+    local direction = (destination - origin)
     
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = {character, Camera}
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
     
     local result = workspace:Raycast(origin, direction, rayParams)
     return not result or result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
---// Get Closest Target
-local function GetClosestTarget()
+--// Get Best Target (Target Lock Logic)
+local function GetTarget()
+    -- ถ้ามีเป้าเดิมอยู่และยังมองเห็น/ไม่ตาย ให้ใช้เป้าเดิมก่อน
+    if Config.CurrentTarget and Config.CurrentTarget.Parent then
+        local hum = Config.CurrentTarget.Parent:FindFirstChild("Humanoid")
+        if hum and hum.Health > 0 then
+            local pos, onScreen = Camera:WorldToViewportPoint(Config.CurrentTarget.Position)
+            local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+            if onScreen and mag <= Config.FOV and IsVisible(Config.CurrentTarget) then
+                return Config.CurrentTarget
+            end
+        end
+    end
+
+    -- ถ้าไม่มีเป้าเดิม ให้หาเป้าใหม่ที่ใกล้กลางจอที่สุด
     local target = nil
     local shortestDistance = Config.FOV
-
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
-            -- เช็คทีมและเลือด
             if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
             if player.Character.Humanoid.Health <= 0 then continue end
             
@@ -64,9 +74,7 @@ local function GetClosestTarget()
             if part then
                 local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
                 if onScreen and IsVisible(part) then
-                    local mousePos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-                    local magnitude = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                    
+                    local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
                     if magnitude < shortestDistance then
                         target = part
                         shortestDistance = magnitude
@@ -75,150 +83,121 @@ local function GetClosestTarget()
             end
         end
     end
+    Config.CurrentTarget = target
     return target
 end
 
 --// UI Setup
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB | ALL-IN-ONE V4",
-    LoadingTitle = "Merging Modules...",
+    Name = "COCO HUB | LEGIT V7",
+    LoadingTitle = "Securing Connection...",
     ConfigurationSaving = {Enabled = false}
 })
 
-local CombatTab = Window:CreateTab("Combat")
+local CombatTab = Window:CreateTab("Combat (Legit)")
 local VisualTab = Window:CreateTab("Visuals")
 local MovementTab = Window:CreateTab("Movement")
 
---// Combat Section
-CombatTab:CreateSection("Aimbot & FOV")
 CombatTab:CreateToggle({
-    Name = "Enable Aimbot (Right Click)",
+    Name = "Legit Aimbot (Smooth)",
     CurrentValue = false,
     Callback = function(v) Config.Aimbot = v end
 })
 
-CombatTab:CreateToggle({
-    Name = "Show Rainbow FOV",
-    CurrentValue = true,
-    Callback = function(v) Config.FOVVisible = v end
-})
-
 CombatTab:CreateSlider({
-    Name = "Aimbot FOV",
-    Range = {50, 800},
+    Name = "Smoothness (High = Safe)",
+    Range = {1, 50},
     Increment = 1,
-    CurrentValue = 200,
-    Callback = function(v) 
-        Config.FOV = v 
-        FOVCircle.Radius = v
-    end
+    CurrentValue = 15,
+    Callback = function(v) Config.Smoothness = v end
 })
 
-CombatTab:CreateSection("Hitbox Settings")
 CombatTab:CreateToggle({
-    Name = "Hitbox Expander",
+    Name = "Small Hitbox (Safe)",
     CurrentValue = false,
     Callback = function(v) 
         Config.HitboxEnabled = v 
         if not v then
-            -- Reset Hitboxes เมื่อปิด
             for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = p.Character.HumanoidRootPart
-                    hrp.Size = Vector3.new(2, 2, 1)
-                    hrp.Transparency = 1
-                    hrp.CanCollide = true
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    p.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1)
                 end
             end
         end
     end
 })
 
-CombatTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {2, 50},
-    Increment = 1,
-    CurrentValue = 10,
-    Callback = function(v) Config.HitboxSize = v end
-})
-
---// Visuals Section
 VisualTab:CreateToggle({
-    Name = "Player ESP",
+    Name = "Green ESP (Legit)",
     CurrentValue = false,
-    Callback = function(v) 
-        Config.ESP = v 
-        if not v then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChild("CocoESP") then
-                    p.Character.CocoESP:Destroy()
-                end
-            end
-        end
-    end
+    Callback = function(v) Config.ESP = v end
 })
 
---// Movement Section
-MovementTab:CreateSlider({
-    Name = "Walk Speed",
-    Range = {16, 250},
-    Increment = 1,
-    CurrentValue = 16,
-    Callback = function(v) Config.WalkSpeed = v end
-})
-
---// Main Update Loop
+--// Main Processor Loop
 RunService.RenderStepped:Connect(function()
-    -- 1. Rainbow FOV Logic
+    -- 1. FOV Rainbow
     if Config.FOVVisible then
         FOVCircle.Visible = true
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1) 
+        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 0.8, 1)
     else
         FOVCircle.Visible = false
     end
 
-    -- 2. Aimbot Logic (ล็อคเมื่อกดคลิกขวา)
-    if Config.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local target = GetClosestTarget()
+    -- 2. Legit Aimbot (Interpolation)
+    if Config.Aimbot then
+        local target = GetTarget()
         if target then
-            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+            -- ใช้การหมุนกล้องแบบ Lerp เพื่อความเนียน
+            local lookAt = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+            Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / Config.Smoothness)
         end
     end
 
-    -- 3. Hitbox Update
-    if Config.HitboxEnabled then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = p.Character.HumanoidRootPart
-                hrp.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-                hrp.Transparency = 0.7
-                hrp.BrickColor = BrickColor.new("Bright red")
-                hrp.CanCollide = false
+    -- 3. Speed & Fly (Mobile Friendly)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
+        
+        if Config.Fly and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = LocalPlayer.Character.HumanoidRootPart
+            local moveDir = LocalPlayer.Character.Humanoid.MoveDirection
+            if moveDir.Magnitude > 0 then
+                hrp.Velocity = (Camera.CFrame.LookVector * moveDir.Z + Camera.CFrame.RightVector * moveDir.X).Unit * Config.FlySpeed
+            else
+                hrp.Velocity = Vector3.new(0, 0.1, 0) -- ต้านแรงโน้มถ่วงเล็กน้อยให้นิ่งขึ้น
             end
         end
     end
+end)
 
-    -- 4. Speed Logic
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
-    end
-
-    -- 5. ESP Logic
-    if Config.ESP then
+--// ESP & Hitbox (Low Frequency Loop for Performance)
+task.spawn(function()
+    while task.wait(0.5) do
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and not p.Character:FindFirstChild("CocoESP") then
-                local hl = Instance.new("Highlight")
-                hl.Name = "CocoESP"
-                hl.FillColor = Color3.fromRGB(255, 0, 0)
-                hl.Parent = p.Character
+            if p ~= LocalPlayer and p.Character then
+                -- Hitbox
+                if Config.HitboxEnabled and p.Character:FindFirstChild("HumanoidRootPart") then
+                    p.Character.HumanoidRootPart.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+                    p.Character.HumanoidRootPart.Transparency = 0.8
+                end
+                -- ESP
+                if Config.ESP then
+                    if not p.Character:FindFirstChild("CocoESP") then
+                        local hl = Instance.new("Highlight", p.Character)
+                        hl.Name = "CocoESP"
+                        hl.FillColor = Color3.fromRGB(0, 255, 0)
+                        hl.OutlineTransparency = 0.5
+                    end
+                else
+                    if p.Character:FindFirstChild("CocoESP") then p.Character.CocoESP:Destroy() end
+                end
             end
         end
     end
 end)
 
 Rayfield:Notify({
-    Title = "COCO HUB COMPLETED",
-    Content = "All features merged and fixed!",
+    Title = "COCO HUB V7 LEGIT",
+    Content = "Safety protocols active. Aimbot is now Smoothed.",
     Duration = 5
 })
