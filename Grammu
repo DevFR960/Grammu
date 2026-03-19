@@ -10,22 +10,21 @@ local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/Siri
 --// Configuration Settings
 local Config = {
     Aimbot = false,
-    Smoothness = 15, -- ยิ่งเยอะยิ่งเนียน (แนะนำ 10-20)
+    Smoothness = 18, -- Higher = Safer (Recommended 15-25)
     AimPart = "Head",
     FOV = 150,
     FOVVisible = true,
-    TeamCheck = true,
+    TeamCheck = false,
     WallCheck = true,
-    HitboxEnabled = false,
-    HitboxSize = 5, -- ปรับให้ไม่ใหญ่เกินไปเพื่อความเนียน
     WalkSpeed = 16,
     Fly = false,
     FlySpeed = 50,
-    ESP = false,
-    CurrentTarget = nil -- ระบบ Lock เป้าเดี่ยว
+    ESP_Enabled = false,
+    ESP_Chams = false,
+    CurrentTarget = nil
 }
 
---// FOV Circle (Rainbow)
+--// FOV Circle
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1
 FOVCircle.NumSides = 64
@@ -33,171 +32,159 @@ FOVCircle.Radius = Config.FOV
 FOVCircle.Filled = false
 FOVCircle.Visible = Config.FOVVisible
 
---// Legit Visibility Check
+--// Helper: Smart Team & Info Finder
+local function GetPlayerInfo(player)
+    local teamName = "Neutral"
+    local teamColor = Color3.fromRGB(255, 255, 255)
+    local health = 0
+    local maxHealth = 100
+    local distance = 0
+
+    if player.Team then 
+        teamName = player.Team.Name 
+        teamColor = player.Team.TeamColor.Color
+    end
+
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        health = math.floor(player.Character.Humanoid.Health)
+        maxHealth = math.floor(player.Character.Humanoid.MaxHealth)
+        distance = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude)
+    end
+
+    return teamName, teamColor, health, maxHealth, distance
+end
+
+--// Visibility Check (Raycast)
 local function IsVisible(targetPart)
     if not Config.WallCheck then return true end
-    local origin = Camera.CFrame.Position
-    local destination = targetPart.Position
-    local direction = (destination - origin)
-    
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
     rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-    
-    local result = workspace:Raycast(origin, direction, rayParams)
+    local result = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), rayParams)
     return not result or result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
---// Get Best Target (Target Lock Logic)
-local function GetTarget()
-    -- ถ้ามีเป้าเดิมอยู่และยังมองเห็น/ไม่ตาย ให้ใช้เป้าเดิมก่อน
-    if Config.CurrentTarget and Config.CurrentTarget.Parent then
-        local hum = Config.CurrentTarget.Parent:FindFirstChild("Humanoid")
-        if hum and hum.Health > 0 then
-            local pos, onScreen = Camera:WorldToViewportPoint(Config.CurrentTarget.Position)
-            local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-            if onScreen and mag <= Config.FOV and IsVisible(Config.CurrentTarget) then
-                return Config.CurrentTarget
-            end
-        end
+--// ESP Tag Creation
+local function UpdateESP(player)
+    if not player.Character or not player.Character:FindFirstChild("Head") then return end
+    local head = player.Character.Head
+    local tag = head:FindFirstChild("CocoV10Tag")
+    
+    if not Config.ESP_Enabled then
+        if tag then tag:Destroy() end
+        return
     end
 
-    -- ถ้าไม่มีเป้าเดิม ให้หาเป้าใหม่ที่ใกล้กลางจอที่สุด
+    if not tag then
+        tag = Instance.new("BillboardGui")
+        tag.Name = "CocoV10Tag"
+        tag.Adornee = head
+        tag.Size = UDim2.new(0, 200, 0, 70)
+        tag.StudsOffset = Vector3.new(0, 4, 0)
+        tag.AlwaysOnTop = true
+        tag.Parent = head
+
+        local label = Instance.new("TextLabel", tag)
+        label.Name = "MainLabel"
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.TextStrokeTransparency = 0.2
+        label.Font = Enum.Font.RobotoMono
+        label.TextSize = 13
+    end
+
+    local teamName, teamColor, hp, maxHp, dist = GetPlayerInfo(player)
+    local hpPercent = (hp / maxHp)
+    local hpColor = Color3.fromHSV(hpPercent * 0.3, 1, 1) -- Red to Green
+
+    tag.MainLabel.TextColor3 = teamColor
+    tag.MainLabel.Text = string.format(
+        "%s\n[Team: %s]\n[HP: %d/%d]\n[Dist: %d]", 
+        player.DisplayName or player.Name, teamName, hp, maxHp, dist
+    )
+end
+
+--// Get Targeted Player (Humanized Logic)
+local function GetTarget()
     local target = nil
     local shortestDistance = Config.FOV
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
             if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
             if player.Character.Humanoid.Health <= 0 then continue end
-            
             local part = player.Character:FindFirstChild(Config.AimPart)
             if part then
                 local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
                 if onScreen and IsVisible(part) then
-                    local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                    if magnitude < shortestDistance then
-                        target = part
-                        shortestDistance = magnitude
-                    end
+                    local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                    if mag < shortestDistance then target = part shortestDistance = mag end
                 end
             end
         end
     end
-    Config.CurrentTarget = target
     return target
 end
 
 --// UI Setup
-local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB | LEGIT V7",
-    LoadingTitle = "Securing Connection...",
-    ConfigurationSaving = {Enabled = false}
-})
+local Window = Rayfield:CreateWindow({Name = "COCO HUB | PRO V10 (EN)", LoadingTitle = "Securing Environment...", ConfigurationSaving = {Enabled = false}})
+local Tab1 = Window:CreateTab("Combat")
+local Tab2 = Window:CreateTab("Visuals")
+local Tab3 = Window:CreateTab("Movement")
 
-local CombatTab = Window:CreateTab("Combat (Legit)")
-local VisualTab = Window:CreateTab("Visuals")
-local MovementTab = Window:CreateTab("Movement")
+Tab1:CreateToggle({Name = "Aimbot (Safe Smoothing)", CurrentValue = false, Callback = function(v) Config.Aimbot = v end})
+Tab1:CreateSlider({Name = "Legit Smoothness", Range = {1, 50}, Increment = 1, CurrentValue = 18, Callback = function(v) Config.Smoothness = v end})
+Tab1:CreateToggle({Name = "Wall Check", CurrentValue = true, Callback = function(v) Config.WallCheck = v end})
 
-CombatTab:CreateToggle({
-    Name = "Legit Aimbot (Smooth)",
-    CurrentValue = false,
-    Callback = function(v) Config.Aimbot = v end
-})
+Tab2:CreateToggle({Name = "Enable Full ESP (Dist/HP)", CurrentValue = false, Callback = function(v) Config.ESP_Enabled = v end})
+Tab2:CreateToggle({Name = "Green Chams (Highlight)", CurrentValue = false, Callback = function(v) Config.ESP_Chams = v end})
 
-CombatTab:CreateSlider({
-    Name = "Smoothness (High = Safe)",
-    Range = {1, 50},
-    Increment = 1,
-    CurrentValue = 15,
-    Callback = function(v) Config.Smoothness = v end
-})
+Tab3:CreateSlider({Name = "WalkSpeed", Range = {16, 200}, Increment = 1, CurrentValue = 16, Callback = function(v) Config.WalkSpeed = v end})
 
-CombatTab:CreateToggle({
-    Name = "Small Hitbox (Safe)",
-    CurrentValue = false,
-    Callback = function(v) 
-        Config.HitboxEnabled = v 
-        if not v then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    p.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1)
-                end
-            end
-        end
-    end
-})
-
-VisualTab:CreateToggle({
-    Name = "Green ESP (Legit)",
-    CurrentValue = false,
-    Callback = function(v) Config.ESP = v end
-})
-
---// Main Processor Loop
+--// Main Processor
 RunService.RenderStepped:Connect(function()
-    -- 1. FOV Rainbow
+    -- FOV Update
     if Config.FOVVisible then
         FOVCircle.Visible = true
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 0.8, 1)
-    else
-        FOVCircle.Visible = false
-    end
+        FOVCircle.Color = Color3.fromHSV(tick() % 5 / 5, 0.6, 1)
+    else FOVCircle.Visible = false end
 
-    -- 2. Legit Aimbot (Interpolation)
+    -- Aimbot (Safe Smoothing)
     if Config.Aimbot then
         local target = GetTarget()
         if target then
-            -- ใช้การหมุนกล้องแบบ Lerp เพื่อความเนียน
-            local lookAt = CFrame.lookAt(Camera.CFrame.Position, target.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / Config.Smoothness)
+            -- Exponential Smoothing (More human-like)
+            local targetCF = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1/Config.Smoothness)
         end
     end
 
-    -- 3. Speed & Fly (Mobile Friendly)
+    -- Character Speed
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
         LocalPlayer.Character.Humanoid.WalkSpeed = Config.WalkSpeed
-        
-        if Config.Fly and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = LocalPlayer.Character.HumanoidRootPart
-            local moveDir = LocalPlayer.Character.Humanoid.MoveDirection
-            if moveDir.Magnitude > 0 then
-                hrp.Velocity = (Camera.CFrame.LookVector * moveDir.Z + Camera.CFrame.RightVector * moveDir.X).Unit * Config.FlySpeed
-            else
-                hrp.Velocity = Vector3.new(0, 0.1, 0) -- ต้านแรงโน้มถ่วงเล็กน้อยให้นิ่งขึ้น
-            end
-        end
     end
 end)
 
---// ESP & Hitbox (Low Frequency Loop for Performance)
+--// Visuals & Chams Update Loop (0.5s Frequency for Safety)
 task.spawn(function()
     while task.wait(0.5) do
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character then
-                -- Hitbox
-                if Config.HitboxEnabled and p.Character:FindFirstChild("HumanoidRootPart") then
-                    p.Character.HumanoidRootPart.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-                    p.Character.HumanoidRootPart.Transparency = 0.8
-                end
-                -- ESP
-                if Config.ESP then
-                    if not p.Character:FindFirstChild("CocoESP") then
+                UpdateESP(p) -- Refresh Tags
+                -- Chams
+                if Config.ESP_Chams then
+                    if not p.Character:FindFirstChild("CocoCham") then
                         local hl = Instance.new("Highlight", p.Character)
-                        hl.Name = "CocoESP"
+                        hl.Name = "CocoCham"
                         hl.FillColor = Color3.fromRGB(0, 255, 0)
-                        hl.OutlineTransparency = 0.5
+                        hl.FillTransparency = 0.6
                     end
                 else
-                    if p.Character:FindFirstChild("CocoESP") then p.Character.CocoESP:Destroy() end
+                    if p.Character:FindFirstChild("CocoCham") then p.Character.CocoCham:Destroy() end
                 end
             end
         end
     end
 end)
 
-Rayfield:Notify({
-    Title = "COCO HUB V7 LEGIT",
-    Content = "Safety protocols active. Aimbot is now Smoothed.",
-    Duration = 5
-})
+Rayfield:Notify({Title = "V10 PRO LOADED", Content = "Anti-Detection & Advanced ESP Active.", Duration = 5})
