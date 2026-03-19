@@ -3,6 +3,10 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
+
+--// LOAD RAYFIELD
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --// CONFIG
 local Config = {
@@ -15,26 +19,6 @@ local Config = {
     HitboxSize = 5
 }
 
---// UI (ใช้ Instance ล้วน รองรับมือถือ)
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0,200,0,250)
-Frame.Position = UDim2.new(0,10,0.3,0)
-Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-
-local function Button(text,y,callback)
-    local b = Instance.new("TextButton",Frame)
-    b.Size = UDim2.new(1,0,0,30)
-    b.Position = UDim2.new(0,0,0,y)
-    b.Text = text
-    b.BackgroundColor3 = Color3.fromRGB(40,40,40)
-    b.TextColor3 = Color3.new(1,1,1)
-
-    b.MouseButton1Click:Connect(function()
-        callback(b)
-    end)
-end
-
 --// TEAM
 local function IsEnemy(p)
     if not Config.TeamCheck then return true end
@@ -43,8 +27,7 @@ end
 
 --// TARGET
 local function GetTarget()
-    local target,dist = nil,Config.FOV
-
+    local target, dist = nil, Config.FOV
     for _,p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") then
             local part = p.Character:FindFirstChild("Head")
@@ -60,7 +43,6 @@ local function GetTarget()
             end
         end
     end
-
     return target
 end
 
@@ -70,8 +52,8 @@ RunService.RenderStepped:Connect(function()
         local t = GetTarget()
         if t then
             Camera.CFrame = Camera.CFrame:Lerp(
-                CFrame.lookAt(Camera.CFrame.Position,t.Position),
-                1/Config.Smoothness
+                CFrame.lookAt(Camera.CFrame.Position, t.Position),
+                1 / Config.Smoothness
             )
         end
     end
@@ -85,7 +67,7 @@ local function ApplyHitbox(p)
                 local root = p.Character:FindFirstChild("HumanoidRootPart")
                 if root then
                     if Config.Hitbox and IsEnemy(p) then
-                        root.Size = Vector3.new(Config.HitboxSize,Config.HitboxSize,Config.HitboxSize)
+                        root.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
                         root.Transparency = 0.5
                         root.CanCollide = false
                     else
@@ -98,7 +80,7 @@ local function ApplyHitbox(p)
     end)
 end
 
---// ESP (Highlight แท้ รองรับมือถือ)
+--// ESP (Highlight)
 local ESP = {}
 
 local function AddESP(p)
@@ -107,6 +89,7 @@ local function AddESP(p)
     local h = Instance.new("Highlight")
     h.FillColor = Color3.fromRGB(255,0,0)
     h.OutlineColor = Color3.fromRGB(255,255,255)
+    h.FillTransparency = 0.5
     h.Parent = game.CoreGui
 
     ESP[p] = h
@@ -132,31 +115,110 @@ Players.PlayerAdded:Connect(function(p)
     AddESP(p)
 end)
 
---// UI BUTTONS
-Button("Aimbot OFF",0,function(b)
-    Config.Aimbot = not Config.Aimbot
-    b.Text = "Aimbot "..(Config.Aimbot and "ON" or "OFF")
+--// UI
+local Window = Rayfield:CreateWindow({
+    Name = "COCO HUB RAYFIELD",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "by ChatGPT",
+    ConfigurationSaving = {Enabled = false}
+})
+
+local Combat = Window:CreateTab("Combat")
+local Visual = Window:CreateTab("Visual")
+local HitboxTab = Window:CreateTab("Hitbox")
+
+Combat:CreateToggle({
+    Name = "Aimbot",
+    CurrentValue = false,
+    Callback = function(v) Config.Aimbot = v end
+})
+
+Combat:CreateToggle({
+    Name = "Team Check",
+    CurrentValue = false,
+    Callback = function(v) Config.TeamCheck = v end
+})
+
+Combat:CreateSlider({
+    Name = "FOV",
+    Range = {50,800},
+    Increment = 10,
+    CurrentValue = 200,
+    Callback = function(v) Config.FOV = v end
+})
+
+Combat:CreateSlider({
+    Name = "Smoothness",
+    Range = {1,20},
+    Increment = 1,
+    CurrentValue = 5,
+    Callback = function(v) Config.Smoothness = v end
+})
+
+Visual:CreateToggle({
+    Name = "ESP",
+    CurrentValue = false,
+    Callback = function(v) Config.ESP = v end
+})
+
+HitboxTab:CreateToggle({
+    Name = "Hitbox",
+    CurrentValue = false,
+    Callback = function(v) Config.Hitbox = v end
+})
+
+HitboxTab:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {2,50},
+    Increment = 1,
+    CurrentValue = 5,
+    Callback = function(v) Config.HitboxSize = v end
+})
+
+--// TOGGLE UI PRO V19
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Parent = game.CoreGui
+ToggleBtn.Size = UDim2.new(0,60,0,60)
+ToggleBtn.Position = UDim2.new(0,20,0.6,0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(25,25,25)
+ToggleBtn.Text = "COCO"
+ToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+ToggleBtn.TextScaled = true
+ToggleBtn.Active = true
+ToggleBtn.Draggable = true
+
+local UICorner = Instance.new("UICorner", ToggleBtn)
+UICorner.CornerRadius = UDim.new(1,0)
+
+local UIStroke = Instance.new("UIStroke", ToggleBtn)
+UIStroke.Thickness = 2
+
+local function GetUI()
+    for _,v in pairs(game.CoreGui:GetChildren()) do
+        if v:IsA("ScreenGui") and v.Name:lower():find("rayfield") then
+            return v
+        end
+    end
+end
+
+local UIVisible = true
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    local ui = GetUI()
+    if ui then
+        UIVisible = not UIVisible
+        ui.Enabled = UIVisible
+    end
 end)
 
-Button("ESP OFF",35,function(b)
-    Config.ESP = not Config.ESP
-    b.Text = "ESP "..(Config.ESP and "ON" or "OFF")
+-- Rainbow Effect
+task.spawn(function()
+    while true do
+        for i = 0,255,5 do
+            UIStroke.Color = Color3.fromHSV(i/255,1,1)
+            task.wait(0.03)
+        end
+    end
 end)
 
-Button("Hitbox OFF",70,function(b)
-    Config.Hitbox = not Config.Hitbox
-    b.Text = "Hitbox "..(Config.Hitbox and "ON" or "OFF")
-end)
-
-Button("TeamCheck OFF",105,function(b)
-    Config.TeamCheck = not Config.TeamCheck
-    b.Text = "TeamCheck "..(Config.TeamCheck and "ON" or "OFF")
-end)
-
-Button("FOV +",140,function()
-    Config.FOV = Config.FOV + 50
-end)
-
-Button("FOV -",175,function()
-    Config.FOV = math.max(50,Config.FOV - 50)
-end)
+Rayfield:LoadConfiguration()
