@@ -3,15 +3,16 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
-local UIS = game:GetService("UserInputService")
 
---// LOAD RAYFIELD
+--// UI LIBRARY
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --// CONFIG
 local Config = {
     Aimbot = false,
+    AimPart = "Head",
     TeamCheck = false,
+    WallCheck = false,
     FOV = 200,
     Smoothness = 5,
     ESP = false,
@@ -19,107 +20,144 @@ local Config = {
     HitboxSize = 5
 }
 
---// TEAM
-local function IsEnemy(p)
-    if not Config.TeamCheck then return true end
-    return p.Team ~= LocalPlayer.Team
+--// ANTI-CHEAT LIMITS
+local MaxWalkSpeed = 50
+local MaxJumpPower = 100
+
+--// TEAM CHECK
+local function IsEnemy(player)
+    return not Config.TeamCheck or player.Team ~= LocalPlayer.Team
 end
 
---// TARGET
+--// WALL CHECK
+local function IsVisible(part, character)
+    if not Config.WallCheck then return true end
+    local ray = workspace:Raycast(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position))
+    return ray and ray.Instance and ray.Instance:IsDescendantOf(character)
+end
+
+--// GET TARGET
 local function GetTarget()
-    local target, dist = nil, Config.FOV
-    for _,p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") then
-            local part = p.Character:FindFirstChild("Head")
-            if part and IsEnemy(p) then
-                local pos,onScreen = Camera:WorldToViewportPoint(part.Position)
+    local closestPart = nil
+    local shortestDistance = Config.FOV
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local part = player.Character:FindFirstChild(Config.AimPart)
+
+            if humanoid and part and humanoid.Health > 0 and IsEnemy(player) and IsVisible(part, player.Character) then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+
                 if onScreen then
-                    local mag = (Vector2.new(pos.X,pos.Y) - Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-                    if mag < dist then
-                        dist = mag
-                        target = part
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        closestPart = part
                     end
                 end
             end
         end
     end
-    return target
+
+    return closestPart
 end
 
---// AIMBOT
+--// ESP STORAGE
+local ESP = {}
+
+local function SetupESP(player)
+    if player == LocalPlayer then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Parent = game.CoreGui
+
+    ESP[player] = highlight
+end
+
+for _, player in pairs(Players:GetPlayers()) do
+    SetupESP(player)
+end
+
+Players.PlayerAdded:Connect(SetupESP)
+
+--// MAIN LOOP
 RunService.RenderStepped:Connect(function()
+
+    -- AIMBOT
     if Config.Aimbot then
-        local t = GetTarget()
-        if t then
+        local target = GetTarget()
+        if target then
             Camera.CFrame = Camera.CFrame:Lerp(
-                CFrame.lookAt(Camera.CFrame.Position, t.Position),
+                CFrame.lookAt(Camera.CFrame.Position, target.Position),
                 1 / Config.Smoothness
             )
         end
     end
-end)
 
---// HITBOX
-local function ApplyHitbox(p)
-    task.spawn(function()
-        while task.wait(0.5) do
-            if p.Character and p ~= LocalPlayer then
-                local root = p.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    if Config.Hitbox and IsEnemy(p) then
-                        root.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-                        root.Transparency = 0.5
-                        root.CanCollide = false
-                    else
-                        root.Size = Vector3.new(2,2,1)
-                        root.Transparency = 1
-                    end
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+
+            -- ESP
+            local esp = ESP[player]
+            if esp then
+                if Config.ESP and IsEnemy(player) then
+                    esp.Adornee = player.Character
+                    esp.Enabled = true
+                    esp.FillColor = Color3.fromRGB(255, 0, 0)
+                else
+                    esp.Enabled = false
+                end
+            end
+
+            -- HITBOX
+            if root then
+                if Config.Hitbox and IsEnemy(player) then
+                    root.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+                    root.Transparency = 0.5
+                    root.CanCollide = false
+                else
+                    root.Size = Vector3.new(2, 2, 1)
+                    root.Transparency = 1
+                    root.CanCollide = true
+                end
+            end
+
+            -- ANTI-CHEAT (OTHERS)
+            if humanoid then
+                if humanoid.WalkSpeed > MaxWalkSpeed then
+                    humanoid.WalkSpeed = 16
+                end
+                if humanoid.JumpPower > MaxJumpPower then
+                    humanoid.JumpPower = 50
                 end
             end
         end
-    end)
-end
+    end
 
---// ESP (Highlight)
-local ESP = {}
-
-local function AddESP(p)
-    if p == LocalPlayer then return end
-
-    local h = Instance.new("Highlight")
-    h.FillColor = Color3.fromRGB(255,0,0)
-    h.OutlineColor = Color3.fromRGB(255,255,255)
-    h.FillTransparency = 0.5
-    h.Parent = game.CoreGui
-
-    ESP[p] = h
-
-    RunService.RenderStepped:Connect(function()
-        if Config.ESP and p.Character and IsEnemy(p) then
-            h.Adornee = p.Character
-            h.Enabled = true
-        else
-            h.Enabled = false
+    -- ANTI-CHEAT (LOCAL PLAYER)
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            if humanoid.WalkSpeed > MaxWalkSpeed then
+                humanoid.WalkSpeed = 16
+            end
+            if humanoid.JumpPower > MaxJumpPower then
+                humanoid.JumpPower = 50
+            end
         end
-    end)
-end
+    end
 
---// LOAD PLAYERS
-for _,p in pairs(Players:GetPlayers()) do
-    ApplyHitbox(p)
-    AddESP(p)
-end
-
-Players.PlayerAdded:Connect(function(p)
-    ApplyHitbox(p)
-    AddESP(p)
 end)
 
 --// UI
 local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB RAYFIELD",
+    Name = "COCO HUB STABLE",
     LoadingTitle = "Loading...",
-    LoadingSubtitle = "by ChatGPT",
     ConfigurationSaving = {Enabled = false}
 })
 
@@ -129,96 +167,51 @@ local HitboxTab = Window:CreateTab("Hitbox")
 
 Combat:CreateToggle({
     Name = "Aimbot",
-    CurrentValue = false,
-    Callback = function(v) Config.Aimbot = v end
+    Callback = function(v)
+        Config.Aimbot = v
+    end
+})
+
+Combat:CreateDropdown({
+    Name = "Aim Part",
+    Options = {"Head", "HumanoidRootPart"},
+    Callback = function(v)
+        Config.AimPart = v
+    end
 })
 
 Combat:CreateToggle({
     Name = "Team Check",
-    CurrentValue = false,
-    Callback = function(v) Config.TeamCheck = v end
+    Callback = function(v)
+        Config.TeamCheck = v
+    end
 })
 
-Combat:CreateSlider({
-    Name = "FOV",
-    Range = {50,800},
-    Increment = 10,
-    CurrentValue = 200,
-    Callback = function(v) Config.FOV = v end
-})
-
-Combat:CreateSlider({
-    Name = "Smoothness",
-    Range = {1,20},
-    Increment = 1,
-    CurrentValue = 5,
-    Callback = function(v) Config.Smoothness = v end
+Combat:CreateToggle({
+    Name = "Wall Check",
+    Callback = function(v)
+        Config.WallCheck = v
+    end
 })
 
 Visual:CreateToggle({
     Name = "ESP",
-    CurrentValue = false,
-    Callback = function(v) Config.ESP = v end
+    Callback = function(v)
+        Config.ESP = v
+    end
 })
 
 HitboxTab:CreateToggle({
     Name = "Hitbox",
-    CurrentValue = false,
-    Callback = function(v) Config.Hitbox = v end
+    Callback = function(v)
+        Config.Hitbox = v
+    end
 })
 
 HitboxTab:CreateSlider({
     Name = "Hitbox Size",
-    Range = {2,50},
-    Increment = 1,
-    CurrentValue = 5,
-    Callback = function(v) Config.HitboxSize = v end
+    Range = {2, 50},
+    Callback = function(v)
+        Config.HitboxSize = v
+    end
 })
-
---// TOGGLE UI PRO V19
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Parent = game.CoreGui
-ToggleBtn.Size = UDim2.new(0,60,0,60)
-ToggleBtn.Position = UDim2.new(0,20,0.6,0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(25,25,25)
-ToggleBtn.Text = "COCO"
-ToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
-ToggleBtn.TextScaled = true
-ToggleBtn.Active = true
-ToggleBtn.Draggable = true
-
-local UICorner = Instance.new("UICorner", ToggleBtn)
-UICorner.CornerRadius = UDim.new(1,0)
-
-local UIStroke = Instance.new("UIStroke", ToggleBtn)
-UIStroke.Thickness = 2
-
-local function GetUI()
-    for _,v in pairs(game.CoreGui:GetChildren()) do
-        if v:IsA("ScreenGui") and v.Name:lower():find("rayfield") then
-            return v
-        end
-    end
-end
-
-local UIVisible = true
-
-ToggleBtn.MouseButton1Click:Connect(function()
-    local ui = GetUI()
-    if ui then
-        UIVisible = not UIVisible
-        ui.Enabled = UIVisible
-    end
-end)
-
--- Rainbow Effect
-task.spawn(function()
-    while true do
-        for i = 0,255,5 do
-            UIStroke.Color = Color3.fromHSV(i/255,1,1)
-            task.wait(0.03)
-        end
-    end
-end)
-
-Rayfield:LoadConfiguration()
