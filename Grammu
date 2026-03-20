@@ -12,6 +12,7 @@ local Config = {
     Aimbot = false,
     AimPart = "Head",
     TeamCheck = false,
+    WallCheck = false,
     FOV = 200,
 
     ESP = true,
@@ -19,17 +20,31 @@ local Config = {
     Tracer = true,
     ESPDistance = 500,
     MaxESP = 8,
-
-    Hitbox = false,
-    HitboxSize = 5
 }
 
---// TEAM CHECK
+--// TEAM CHECK (FIXED)
 local function IsEnemy(p)
-    return not Config.TeamCheck or p.Team ~= LocalPlayer.Team
+    if not p.Team or not LocalPlayer.Team then return true end
+    return p.Team ~= LocalPlayer.Team
 end
 
---// PLAYER + ESP STORAGE
+--// WALL CHECK
+local function IsVisible(part)
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin)
+
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local result = workspace:Raycast(origin, direction, params)
+    if result then
+        return result.Instance:IsDescendantOf(part.Parent)
+    end
+    return true
+end
+
+--// PLAYER DATA
 local PlayerData = {}
 
 local function SetupPlayer(p)
@@ -37,7 +52,7 @@ local function SetupPlayer(p)
 
     local data = {}
 
-    -- ESP GUI
+    -- ESP
     local gui = Instance.new("BillboardGui")
     gui.Size = UDim2.new(3,0,4,0)
     gui.AlwaysOnTop = true
@@ -58,17 +73,31 @@ local function SetupPlayer(p)
     data.Tracer = tracer
     data.Character = nil
 
-    -- Character handler (แก้บัคจริง)
+    -- CHARACTER HANDLER (FIX ALL BUG)
     local function onChar(char)
         data.Character = char
+
+        -- reset ESP
+        gui.Enabled = false
+        tracer.Visible = false
+
+        local hum = char:WaitForChild("Humanoid")
+
+        -- 🔥 ดับ ESP ตอนตาย
+        hum.Died:Connect(function()
+            gui.Enabled = false
+            tracer.Visible = false
+        end)
     end
 
-    if p.Character then
-        onChar(p.Character)
-    end
+    if p.Character then onChar(p.Character) end
+    p.CharacterAdded:Connect(onChar)
 
-    p.CharacterAdded:Connect(function(char)
-        onChar(char)
+    -- 🔥 FIX TEAM UPDATE REALTIME
+    p:GetPropertyChangedSignal("Team"):Connect(function()
+        -- reset esp ทันทีเมื่อเปลี่ยนทีม
+        gui.Enabled = false
+        tracer.Visible = false
     end)
 
     PlayerData[p] = data
@@ -91,7 +120,7 @@ end
 Players.PlayerAdded:Connect(SetupPlayer)
 Players.PlayerRemoving:Connect(RemovePlayer)
 
---// GET SORTED TARGETS (แก้ของจริง)
+--// GET SORTED
 local function GetSortedPlayers()
     local list = {}
 
@@ -126,7 +155,7 @@ local function GetTarget(sorted)
         local p = sorted[i].player
         local part = sorted[i].head
 
-        if IsEnemy(p) then
+        if IsEnemy(p) and (not Config.WallCheck or IsVisible(part)) then
             local pos,onScreen = Camera:WorldToViewportPoint(part.Position)
             if onScreen then
                 local dist = (Vector2.new(pos.X,pos.Y) - 
@@ -148,7 +177,7 @@ RunService.RenderStepped:Connect(function()
 
     local sorted = GetSortedPlayers()
 
-    -- AIMBOT (เนียนขึ้น)
+    -- AIMBOT
     if Config.Aimbot then
         local target = GetTarget(sorted)
         if target then
@@ -160,7 +189,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- ESP (เลือกใกล้สุดจริง)
+    -- ESP
     for i,info in ipairs(sorted) do
         if i > Config.MaxESP then break end
 
@@ -169,7 +198,7 @@ RunService.RenderStepped:Connect(function()
         local data = PlayerData[p]
 
         local pos,onScreen = Camera:WorldToViewportPoint(head.Position)
-        local isEnemy = p.Team ~= LocalPlayer.Team
+        local isEnemy = IsEnemy(p)
 
         if data and onScreen then
             if not Config.ShowTeam and not isEnemy then
@@ -184,7 +213,7 @@ RunService.RenderStepped:Connect(function()
                 data.Text.Text = p.Name.." | "..math.floor(info.dist).."m"
                 data.Text.TextColor3 = color
 
-                if Config.Tracer and i <= 5 then -- 🔥 limit tracer
+                if Config.Tracer and i <= 5 then
                     local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
                     local d = (center - Vector2.new(pos.X,pos.Y)).Magnitude
                     local ang = math.atan2(pos.Y-center.Y,pos.X-center.X)
@@ -203,12 +232,13 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --// UI
-local Window = Rayfield:CreateWindow({Name="COCO HUB REAL FIX"})
+local Window = Rayfield:CreateWindow({Name="COCO HUB FINAL FIX"})
 local Combat = Window:CreateTab("Combat")
 local Visual = Window:CreateTab("Visual")
 
 Combat:CreateToggle({Name="Aimbot",Callback=function(v)Config.Aimbot=v end})
 Combat:CreateToggle({Name="Team Check",Callback=function(v)Config.TeamCheck=v end})
+Combat:CreateToggle({Name="Wall Check",Callback=function(v)Config.WallCheck=v end})
 
 Visual:CreateToggle({Name="ESP",Callback=function(v)Config.ESP=v end})
 Visual:CreateToggle({Name="Show Team",Callback=function(v)Config.ShowTeam=v end})
