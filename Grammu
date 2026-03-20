@@ -4,7 +4,7 @@ local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
---// UI LIBRARY
+--// UI
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --// CONFIG
@@ -12,206 +12,204 @@ local Config = {
     Aimbot = false,
     AimPart = "Head",
     TeamCheck = false,
-    WallCheck = false,
     FOV = 200,
-    Smoothness = 5,
-    ESP = false,
+
+    ESP = true,
+    ShowTeam = true,
+    Tracer = true,
+    ESPDistance = 500,
+    MaxESP = 8,
+
     Hitbox = false,
     HitboxSize = 5
 }
 
---// ANTI-CHEAT LIMITS
-local MaxWalkSpeed = 50
-local MaxJumpPower = 100
-
 --// TEAM CHECK
-local function IsEnemy(player)
-    return not Config.TeamCheck or player.Team ~= LocalPlayer.Team
+local function IsEnemy(p)
+    return not Config.TeamCheck or p.Team ~= LocalPlayer.Team
 end
 
---// WALL CHECK
-local function IsVisible(part, character)
-    if not Config.WallCheck then return true end
-    local ray = workspace:Raycast(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position))
-    return ray and ray.Instance and ray.Instance:IsDescendantOf(character)
+--// PLAYER + ESP STORAGE
+local PlayerData = {}
+
+local function SetupPlayer(p)
+    if p == LocalPlayer then return end
+
+    local data = {}
+
+    -- ESP GUI
+    local gui = Instance.new("BillboardGui")
+    gui.Size = UDim2.new(3,0,4,0)
+    gui.AlwaysOnTop = true
+    gui.Parent = game.CoreGui
+
+    local text = Instance.new("TextLabel", gui)
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.TextScaled = true
+
+    local tracer = Instance.new("Frame")
+    tracer.Parent = game.CoreGui
+    tracer.Size = UDim2.new(0,2,0,100)
+    tracer.AnchorPoint = Vector2.new(0.5,0)
+
+    data.GUI = gui
+    data.Text = text
+    data.Tracer = tracer
+    data.Character = nil
+
+    -- Character handler (แก้บัคจริง)
+    local function onChar(char)
+        data.Character = char
+    end
+
+    if p.Character then
+        onChar(p.Character)
+    end
+
+    p.CharacterAdded:Connect(function(char)
+        onChar(char)
+    end)
+
+    PlayerData[p] = data
 end
 
---// GET TARGET
-local function GetTarget()
-    local closestPart = nil
-    local shortestDistance = Config.FOV
+local function RemovePlayer(p)
+    local d = PlayerData[p]
+    if d then
+        if d.GUI then d.GUI:Destroy() end
+        if d.Tracer then d.Tracer:Destroy() end
+        PlayerData[p] = nil
+    end
+end
 
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local part = player.Character:FindFirstChild(Config.AimPart)
+-- INIT
+for _,p in ipairs(Players:GetPlayers()) do
+    SetupPlayer(p)
+end
 
-            if humanoid and part and humanoid.Health > 0 and IsEnemy(player) and IsVisible(part, player.Character) then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+Players.PlayerAdded:Connect(SetupPlayer)
+Players.PlayerRemoving:Connect(RemovePlayer)
 
-                if onScreen then
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+--// GET SORTED TARGETS (แก้ของจริง)
+local function GetSortedPlayers()
+    local list = {}
 
-                    if distance < shortestDistance then
-                        shortestDistance = distance
-                        closestPart = part
-                    end
+    for p,data in pairs(PlayerData) do
+        local char = data.Character
+        if char then
+            local head = char:FindFirstChild("Head")
+            local hum = char:FindFirstChild("Humanoid")
+
+            if head and hum and hum.Health > 0 then
+                local dist = (head.Position - Camera.CFrame.Position).Magnitude
+                if dist < Config.ESPDistance then
+                    table.insert(list, {player=p, head=head, dist=dist})
                 end
             end
         end
     end
 
-    return closestPart
+    table.sort(list, function(a,b)
+        return a.dist < b.dist
+    end)
+
+    return list
 end
 
---// ESP STORAGE
-local ESP = {}
+--// TARGET
+local function GetTarget(sorted)
+    local best = nil
+    local shortest = Config.FOV
 
-local function SetupESP(player)
-    if player == LocalPlayer then return end
+    for i = 1, #sorted do
+        local p = sorted[i].player
+        local part = sorted[i].head
 
-    local highlight = Instance.new("Highlight")
-    highlight.Parent = game.CoreGui
+        if IsEnemy(p) then
+            local pos,onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                local dist = (Vector2.new(pos.X,pos.Y) - 
+                    Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
 
-    ESP[player] = highlight
+                if dist < shortest then
+                    shortest = dist
+                    best = part
+                end
+            end
+        end
+    end
+
+    return best
 end
-
-for _, player in pairs(Players:GetPlayers()) do
-    SetupESP(player)
-end
-
-Players.PlayerAdded:Connect(SetupESP)
 
 --// MAIN LOOP
 RunService.RenderStepped:Connect(function()
 
-    -- AIMBOT
+    local sorted = GetSortedPlayers()
+
+    -- AIMBOT (เนียนขึ้น)
     if Config.Aimbot then
-        local target = GetTarget()
+        local target = GetTarget(sorted)
         if target then
+            local smooth = 0.10 + math.random()*0.03
             Camera.CFrame = Camera.CFrame:Lerp(
                 CFrame.lookAt(Camera.CFrame.Position, target.Position),
-                1 / Config.Smoothness
+                smooth
             )
         end
     end
 
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
+    -- ESP (เลือกใกล้สุดจริง)
+    for i,info in ipairs(sorted) do
+        if i > Config.MaxESP then break end
 
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
+        local p = info.player
+        local head = info.head
+        local data = PlayerData[p]
 
-            -- ESP
-            local esp = ESP[player]
-            if esp then
-                if Config.ESP and IsEnemy(player) then
-                    esp.Adornee = player.Character
-                    esp.Enabled = true
-                    esp.FillColor = Color3.fromRGB(255, 0, 0)
+        local pos,onScreen = Camera:WorldToViewportPoint(head.Position)
+        local isEnemy = p.Team ~= LocalPlayer.Team
+
+        if data and onScreen then
+            if not Config.ShowTeam and not isEnemy then
+                data.GUI.Enabled = false
+                data.Tracer.Visible = false
+            else
+                local color = isEnemy and Color3.fromRGB(255,0,0) or Color3.fromRGB(0,255,0)
+
+                data.GUI.Adornee = head
+                data.GUI.Enabled = Config.ESP
+
+                data.Text.Text = p.Name.." | "..math.floor(info.dist).."m"
+                data.Text.TextColor3 = color
+
+                if Config.Tracer and i <= 5 then -- 🔥 limit tracer
+                    local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
+                    local d = (center - Vector2.new(pos.X,pos.Y)).Magnitude
+                    local ang = math.atan2(pos.Y-center.Y,pos.X-center.X)
+
+                    data.Tracer.Position = UDim2.new(0,center.X,0,center.Y)
+                    data.Tracer.Size = UDim2.new(0,2,0,d)
+                    data.Tracer.Rotation = math.deg(ang)+90
+                    data.Tracer.BackgroundColor3 = color
+                    data.Tracer.Visible = true
                 else
-                    esp.Enabled = false
-                end
-            end
-
-            -- HITBOX
-            if root then
-                if Config.Hitbox and IsEnemy(player) then
-                    root.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-                    root.Transparency = 0.5
-                    root.CanCollide = false
-                else
-                    root.Size = Vector3.new(2, 2, 1)
-                    root.Transparency = 1
-                    root.CanCollide = true
-                end
-            end
-
-            -- ANTI-CHEAT (OTHERS)
-            if humanoid then
-                if humanoid.WalkSpeed > MaxWalkSpeed then
-                    humanoid.WalkSpeed = 16
-                end
-                if humanoid.JumpPower > MaxJumpPower then
-                    humanoid.JumpPower = 50
+                    data.Tracer.Visible = false
                 end
             end
         end
     end
-
-    -- ANTI-CHEAT (LOCAL PLAYER)
-    if LocalPlayer.Character then
-        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            if humanoid.WalkSpeed > MaxWalkSpeed then
-                humanoid.WalkSpeed = 16
-            end
-            if humanoid.JumpPower > MaxJumpPower then
-                humanoid.JumpPower = 50
-            end
-        end
-    end
-
 end)
 
 --// UI
-local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB STABLE",
-    LoadingTitle = "Loading...",
-    ConfigurationSaving = {Enabled = false}
-})
-
+local Window = Rayfield:CreateWindow({Name="COCO HUB REAL FIX"})
 local Combat = Window:CreateTab("Combat")
 local Visual = Window:CreateTab("Visual")
-local HitboxTab = Window:CreateTab("Hitbox")
 
-Combat:CreateToggle({
-    Name = "Aimbot",
-    Callback = function(v)
-        Config.Aimbot = v
-    end
-})
+Combat:CreateToggle({Name="Aimbot",Callback=function(v)Config.Aimbot=v end})
+Combat:CreateToggle({Name="Team Check",Callback=function(v)Config.TeamCheck=v end})
 
-Combat:CreateDropdown({
-    Name = "Aim Part",
-    Options = {"Head", "HumanoidRootPart"},
-    Callback = function(v)
-        Config.AimPart = v
-    end
-})
-
-Combat:CreateToggle({
-    Name = "Team Check",
-    Callback = function(v)
-        Config.TeamCheck = v
-    end
-})
-
-Combat:CreateToggle({
-    Name = "Wall Check",
-    Callback = function(v)
-        Config.WallCheck = v
-    end
-})
-
-Visual:CreateToggle({
-    Name = "ESP",
-    Callback = function(v)
-        Config.ESP = v
-    end
-})
-
-HitboxTab:CreateToggle({
-    Name = "Hitbox",
-    Callback = function(v)
-        Config.Hitbox = v
-    end
-})
-
-HitboxTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {2, 50},
-    Callback = function(v)
-        Config.HitboxSize = v
-    end
-})
+Visual:CreateToggle({Name="ESP",Callback=function(v)Config.ESP=v end})
+Visual:CreateToggle({Name="Show Team",Callback=function(v)Config.ShowTeam=v end})
+Visual:CreateToggle({Name="Tracer",Callback=function(v)Config.Tracer=v end})
