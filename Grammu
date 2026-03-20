@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
 
 --// UI
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -13,17 +14,31 @@ local Config = {
     AimPart="Head",
     FOV=200,
     Smoothness=0.2,
+    LockMode="Smooth",
     TeamCheck=false,
     WallCheck=false,
 
     ESP=true,
-    ShowTeam=true,
+    ESPBox=true,
+    ESPText=true,
+    ESPHighlight=true,
     Tracer=true,
+    ShowTeam=true,
     ESPDistance=600,
 
     Hitbox=false,
     HitboxSize=5
 }
+
+--// TOGGLE UI
+local UIVisible = true
+UIS.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        UIVisible = not UIVisible
+        Rayfield:ToggleUI(UIVisible)
+    end
+end)
 
 --// CACHE
 local CachedPlayers={}
@@ -34,13 +49,12 @@ task.spawn(function()
     end
 end)
 
---// TEAM CHECK
+--// TEAM
 local function IsEnemy(p)
     if not p.Team or not LocalPlayer.Team then return true end
     return p.Team ~= LocalPlayer.Team
 end
 
---// TEAM COLOR
 local function GetTeamColor(p)
     if p.Team and p.Team.TeamColor then
         return p.Team.TeamColor.Color
@@ -51,16 +65,15 @@ local function GetTeamColor(p)
 end
 
 --// WALL CHECK
-local function IsVisible(part, char)
+local function IsVisible(part,char)
     local origin = Camera.CFrame.Position
-    local direction = (part.Position - origin)
+    local direction = (part.Position-origin)
 
     local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.FilterDescendantsInstances={LocalPlayer.Character}
+    params.FilterType=Enum.RaycastFilterType.Blacklist
 
-    local result = workspace:Raycast(origin, direction, params)
-
+    local result = workspace:Raycast(origin,direction,params)
     if result then
         return result.Instance:IsDescendantOf(char)
     end
@@ -110,7 +123,10 @@ for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
 Players.PlayerRemoving:Connect(RemoveESP)
 
---// TARGET
+--// AIMBOT OPTIMIZED
+local CurrentTarget=nil
+local LastUpdate=0
+
 local function GetTarget()
     local closest=nil
     local shortest=Config.FOV
@@ -141,18 +157,27 @@ local function GetTarget()
             end
         end
     end
+
     return closest
 end
 
 --// MAIN LOOP
 RunService.RenderStepped:Connect(function()
 
-    -- AIMBOT
-    if Config.Aimbot then
-        local t=GetTarget()
-        if t then
-            local cf=CFrame.lookAt(Camera.CFrame.Position,t.Position)
-            Camera.CFrame = (Config.Smoothness<=0) and cf or Camera.CFrame:Lerp(cf,Config.Smoothness)
+    -- 🔥 update target
+    if tick()-LastUpdate > 0.1 then
+        CurrentTarget = GetTarget()
+        LastUpdate = tick()
+    end
+
+    -- AIM
+    if Config.Aimbot and CurrentTarget then
+        local newCF = CFrame.lookAt(Camera.CFrame.Position,CurrentTarget.Position)
+
+        if Config.LockMode=="Snap" then
+            Camera.CFrame=newCF
+        else
+            Camera.CFrame=Camera.CFrame:Lerp(newCF,Config.Smoothness)
         end
     end
 
@@ -190,16 +215,18 @@ RunService.RenderStepped:Connect(function()
                     esp.GUI.Adornee=head
                     esp.GUI.Enabled=true
 
-                    local hp=math.floor(hum.Health)
-                    esp.Text.Text=p.Name.." | "..hp.."HP | "..math.floor(dist).."m"
+                    esp.Text.Text=p.Name.." | "..math.floor(hum.Health).."HP | "..math.floor(dist).."m"
                     esp.Text.TextColor3=color
 
                     esp.Box.BorderColor3=color
+                    esp.Box.Visible=Config.ESPBox
+
+                    esp.Text.Visible=Config.ESPText
 
                     esp.HL.Adornee=char
                     esp.HL.FillColor=color
                     esp.HL.OutlineColor=color
-                    esp.HL.Enabled=true
+                    esp.HL.Enabled=Config.ESPHighlight
 
                     if Config.Tracer then
                         local center=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
@@ -238,20 +265,23 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --// UI
-local Window=Rayfield:CreateWindow({Name="COCO HUB FINAL GOD V2"})
-
+local Window=Rayfield:CreateWindow({Name="COCO HUB ULTIMATE"})
 local Combat=Window:CreateTab("Combat")
 local Visual=Window:CreateTab("Visual")
 local HitboxTab=Window:CreateTab("Hitbox")
 
 Combat:CreateToggle({Name="Aimbot",Callback=function(v)Config.Aimbot=v end})
 Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},Callback=function(v)Config.AimPart=v end})
+Combat:CreateDropdown({Name="Lock Mode",Options={"Smooth","Snap"},Callback=function(v)Config.LockMode=v end})
 Combat:CreateSlider({Name="FOV",Range={50,800},Callback=function(v)Config.FOV=v end})
 Combat:CreateSlider({Name="Smoothness",Range={0,100},Callback=function(v)Config.Smoothness=v/100 end})
 Combat:CreateToggle({Name="Team Check",Callback=function(v)Config.TeamCheck=v end})
 Combat:CreateToggle({Name="Wall Check",Callback=function(v)Config.WallCheck=v end})
 
 Visual:CreateToggle({Name="ESP",Callback=function(v)Config.ESP=v end})
+Visual:CreateToggle({Name="ESP Box",Callback=function(v)Config.ESPBox=v end})
+Visual:CreateToggle({Name="ESP Text",Callback=function(v)Config.ESPText=v end})
+Visual:CreateToggle({Name="ESP Highlight",Callback=function(v)Config.ESPHighlight=v end})
 Visual:CreateToggle({Name="Show Team",Callback=function(v)Config.ShowTeam=v end})
 Visual:CreateToggle({Name="Tracer",Callback=function(v)Config.Tracer=v end})
 
