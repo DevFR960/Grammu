@@ -9,27 +9,49 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --// CONFIG
 local Config = {
-    Aimbot = false,
-    AimPart = "Head",
-    TeamCheck = false,
-    WallCheck = false,
-    FOV = 200,
+    Aimbot=false,
+    AimPart="Head",
+    FOV=200,
+    Smoothness=0.2,
+    TeamCheck=false,
+    WallCheck=false,
 
-    ESP = true,
-    ShowTeam = true,
-    Tracer = true,
-    ESPDistance = 500,
-    MaxESP = 8,
+    ESP=true,
+    ShowTeam=true,
+    Tracer=true,
+    ESPDistance=600,
+
+    Hitbox=false,
+    HitboxSize=5
 }
 
---// TEAM CHECK (FIXED)
+--// CACHE
+local CachedPlayers={}
+task.spawn(function()
+    while true do
+        CachedPlayers=Players:GetPlayers()
+        task.wait(1)
+    end
+end)
+
+--// TEAM CHECK
 local function IsEnemy(p)
     if not p.Team or not LocalPlayer.Team then return true end
     return p.Team ~= LocalPlayer.Team
 end
 
+--// TEAM COLOR
+local function GetTeamColor(p)
+    if p.Team and p.Team.TeamColor then
+        return p.Team.TeamColor.Color
+    elseif p.TeamColor then
+        return p.TeamColor.Color
+    end
+    return Color3.fromRGB(255,255,255)
+end
+
 --// WALL CHECK
-local function IsVisible(part)
+local function IsVisible(part, char)
     local origin = Camera.CFrame.Position
     local direction = (part.Position - origin)
 
@@ -38,208 +60,200 @@ local function IsVisible(part)
     params.FilterType = Enum.RaycastFilterType.Blacklist
 
     local result = workspace:Raycast(origin, direction, params)
+
     if result then
-        return result.Instance:IsDescendantOf(part.Parent)
+        return result.Instance:IsDescendantOf(char)
     end
     return true
 end
 
---// PLAYER DATA
-local PlayerData = {}
+--// ESP STORAGE
+local ESP={}
 
-local function SetupPlayer(p)
-    if p == LocalPlayer then return end
+local function CreateESP(p)
+    if p==LocalPlayer then return end
 
-    local data = {}
+    local gui=Instance.new("BillboardGui")
+    gui.Size=UDim2.new(4,0,5,0)
+    gui.AlwaysOnTop=true
+    gui.Parent=game.CoreGui
 
-    -- ESP
-    local gui = Instance.new("BillboardGui")
-    gui.Size = UDim2.new(3,0,4,0)
-    gui.AlwaysOnTop = true
-    gui.Parent = game.CoreGui
+    local box=Instance.new("Frame",gui)
+    box.Size=UDim2.new(1,0,1,0)
+    box.BackgroundTransparency=1
+    box.BorderSizePixel=2
 
-    local text = Instance.new("TextLabel", gui)
-    text.Size = UDim2.new(1,0,1,0)
-    text.BackgroundTransparency = 1
-    text.TextScaled = true
+    local text=Instance.new("TextLabel",gui)
+    text.Size=UDim2.new(1,0,0.5,0)
+    text.BackgroundTransparency=1
+    text.TextScaled=true
 
-    local tracer = Instance.new("Frame")
-    tracer.Parent = game.CoreGui
-    tracer.Size = UDim2.new(0,2,0,100)
-    tracer.AnchorPoint = Vector2.new(0.5,0)
+    local tracer=Instance.new("Frame",game.CoreGui)
+    tracer.Size=UDim2.new(0,2,0,100)
+    tracer.AnchorPoint=Vector2.new(0.5,0)
 
-    data.GUI = gui
-    data.Text = text
-    data.Tracer = tracer
-    data.Character = nil
+    local hl=Instance.new("Highlight",game.CoreGui)
 
-    -- CHARACTER HANDLER (FIX ALL BUG)
-    local function onChar(char)
-        data.Character = char
-
-        -- reset ESP
-        gui.Enabled = false
-        tracer.Visible = false
-
-        local hum = char:WaitForChild("Humanoid")
-
-        -- 🔥 ดับ ESP ตอนตาย
-        hum.Died:Connect(function()
-            gui.Enabled = false
-            tracer.Visible = false
-        end)
-    end
-
-    if p.Character then onChar(p.Character) end
-    p.CharacterAdded:Connect(onChar)
-
-    -- 🔥 FIX TEAM UPDATE REALTIME
-    p:GetPropertyChangedSignal("Team"):Connect(function()
-        -- reset esp ทันทีเมื่อเปลี่ยนทีม
-        gui.Enabled = false
-        tracer.Visible = false
-    end)
-
-    PlayerData[p] = data
+    ESP[p]={GUI=gui,Box=box,Text=text,Tracer=tracer,HL=hl}
 end
 
-local function RemovePlayer(p)
-    local d = PlayerData[p]
-    if d then
-        if d.GUI then d.GUI:Destroy() end
-        if d.Tracer then d.Tracer:Destroy() end
-        PlayerData[p] = nil
+local function RemoveESP(p)
+    if ESP[p] then
+        ESP[p].GUI:Destroy()
+        ESP[p].Tracer:Destroy()
+        ESP[p].HL:Destroy()
+        ESP[p]=nil
     end
 end
 
--- INIT
-for _,p in ipairs(Players:GetPlayers()) do
-    SetupPlayer(p)
-end
-
-Players.PlayerAdded:Connect(SetupPlayer)
-Players.PlayerRemoving:Connect(RemovePlayer)
-
---// GET SORTED
-local function GetSortedPlayers()
-    local list = {}
-
-    for p,data in pairs(PlayerData) do
-        local char = data.Character
-        if char then
-            local head = char:FindFirstChild("Head")
-            local hum = char:FindFirstChild("Humanoid")
-
-            if head and hum and hum.Health > 0 then
-                local dist = (head.Position - Camera.CFrame.Position).Magnitude
-                if dist < Config.ESPDistance then
-                    table.insert(list, {player=p, head=head, dist=dist})
-                end
-            end
-        end
-    end
-
-    table.sort(list, function(a,b)
-        return a.dist < b.dist
-    end)
-
-    return list
-end
+for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(RemoveESP)
 
 --// TARGET
-local function GetTarget(sorted)
-    local best = nil
-    local shortest = Config.FOV
+local function GetTarget()
+    local closest=nil
+    local shortest=Config.FOV
 
-    for i = 1, #sorted do
-        local p = sorted[i].player
-        local part = sorted[i].head
+    for i=1,#CachedPlayers do
+        local p=CachedPlayers[i]
+        if p~=LocalPlayer and p.Character then
 
-        if IsEnemy(p) and (not Config.WallCheck or IsVisible(part)) then
-            local pos,onScreen = Camera:WorldToViewportPoint(part.Position)
-            if onScreen then
-                local dist = (Vector2.new(pos.X,pos.Y) - 
-                    Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+            local char=p.Character
+            local hum=char:FindFirstChild("Humanoid")
 
-                if dist < shortest then
-                    shortest = dist
-                    best = part
+            if hum and hum.Health>0 then
+                local part=char:FindFirstChild(Config.AimPart) or char:FindFirstChild("HumanoidRootPart")
+
+                if part then
+                    if Config.TeamCheck and not IsEnemy(p) then continue end
+                    if Config.WallCheck and not IsVisible(part,char) then continue end
+
+                    local pos,onScreen=Camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local dist=(Vector2.new(pos.X,pos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+                        if dist<shortest then
+                            shortest=dist
+                            closest=part
+                        end
+                    end
                 end
             end
         end
     end
-
-    return best
+    return closest
 end
 
 --// MAIN LOOP
 RunService.RenderStepped:Connect(function()
 
-    local sorted = GetSortedPlayers()
-
     -- AIMBOT
     if Config.Aimbot then
-        local target = GetTarget(sorted)
-        if target then
-            local smooth = 0.10 + math.random()*0.03
-            Camera.CFrame = Camera.CFrame:Lerp(
-                CFrame.lookAt(Camera.CFrame.Position, target.Position),
-                smooth
-            )
+        local t=GetTarget()
+        if t then
+            local cf=CFrame.lookAt(Camera.CFrame.Position,t.Position)
+            Camera.CFrame = (Config.Smoothness<=0) and cf or Camera.CFrame:Lerp(cf,Config.Smoothness)
         end
     end
 
-    -- ESP
-    for i,info in ipairs(sorted) do
-        if i > Config.MaxESP then break end
+    for i=1,#CachedPlayers do
+        local p=CachedPlayers[i]
 
-        local p = info.player
-        local head = info.head
-        local data = PlayerData[p]
+        if p~=LocalPlayer and p.Character then
+            local char=p.Character
+            local head=char:FindFirstChild("Head")
+            local hum=char:FindFirstChild("Humanoid")
+            local root=char:FindFirstChild("HumanoidRootPart")
 
-        local pos,onScreen = Camera:WorldToViewportPoint(head.Position)
-        local isEnemy = IsEnemy(p)
+            local esp=ESP[p]
 
-        if data and onScreen then
-            if not Config.ShowTeam and not isEnemy then
-                data.GUI.Enabled = false
-                data.Tracer.Visible = false
-            else
-                local color = isEnemy and Color3.fromRGB(255,0,0) or Color3.fromRGB(0,255,0)
+            if head and hum and esp then
+                local pos,onScreen=Camera:WorldToViewportPoint(head.Position)
+                local dist=(head.Position-Camera.CFrame.Position).Magnitude
 
-                data.GUI.Adornee = head
-                data.GUI.Enabled = Config.ESP
+                if Config.ESP and hum.Health>0 and onScreen and dist<Config.ESPDistance then
 
-                data.Text.Text = p.Name.." | "..math.floor(info.dist).."m"
-                data.Text.TextColor3 = color
+                    local isEnemy=IsEnemy(p)
 
-                if Config.Tracer and i <= 5 then
-                    local center = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
-                    local d = (center - Vector2.new(pos.X,pos.Y)).Magnitude
-                    local ang = math.atan2(pos.Y-center.Y,pos.X-center.X)
+                    if not Config.ShowTeam and not isEnemy then
+                        esp.GUI.Enabled=false
+                        esp.Tracer.Visible=false
+                        esp.HL.Enabled=false
+                        continue
+                    end
 
-                    data.Tracer.Position = UDim2.new(0,center.X,0,center.Y)
-                    data.Tracer.Size = UDim2.new(0,2,0,d)
-                    data.Tracer.Rotation = math.deg(ang)+90
-                    data.Tracer.BackgroundColor3 = color
-                    data.Tracer.Visible = true
+                    local color=GetTeamColor(p)
+                    if isEnemy then
+                        color=color:Lerp(Color3.fromRGB(255,0,0),0.3)
+                    end
+
+                    esp.GUI.Adornee=head
+                    esp.GUI.Enabled=true
+
+                    local hp=math.floor(hum.Health)
+                    esp.Text.Text=p.Name.." | "..hp.."HP | "..math.floor(dist).."m"
+                    esp.Text.TextColor3=color
+
+                    esp.Box.BorderColor3=color
+
+                    esp.HL.Adornee=char
+                    esp.HL.FillColor=color
+                    esp.HL.OutlineColor=color
+                    esp.HL.Enabled=true
+
+                    if Config.Tracer then
+                        local center=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
+                        local d=(center-Vector2.new(pos.X,pos.Y)).Magnitude
+                        local ang=math.atan2(pos.Y-center.Y,pos.X-center.X)
+
+                        esp.Tracer.Position=UDim2.new(0,center.X,0,center.Y)
+                        esp.Tracer.Size=UDim2.new(0,2,0,d)
+                        esp.Tracer.Rotation=math.deg(ang)+90
+                        esp.Tracer.BackgroundColor3=color
+                        esp.Tracer.Visible=true
+                    else
+                        esp.Tracer.Visible=false
+                    end
+
                 else
-                    data.Tracer.Visible = false
+                    esp.GUI.Enabled=false
+                    esp.Tracer.Visible=false
+                    esp.HL.Enabled=false
+                end
+            end
+
+            -- HITBOX
+            if root then
+                if Config.Hitbox and IsEnemy(p) then
+                    root.Size=Vector3.new(Config.HitboxSize,Config.HitboxSize,Config.HitboxSize)
+                    root.Transparency=0.5
+                else
+                    root.Size=Vector3.new(2,2,1)
+                    root.Transparency=1
                 end
             end
         end
     end
+
 end)
 
 --// UI
-local Window = Rayfield:CreateWindow({Name="COCO HUB FINAL FIX"})
-local Combat = Window:CreateTab("Combat")
-local Visual = Window:CreateTab("Visual")
+local Window=Rayfield:CreateWindow({Name="COCO HUB FINAL GOD V2"})
+
+local Combat=Window:CreateTab("Combat")
+local Visual=Window:CreateTab("Visual")
+local HitboxTab=Window:CreateTab("Hitbox")
 
 Combat:CreateToggle({Name="Aimbot",Callback=function(v)Config.Aimbot=v end})
+Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},Callback=function(v)Config.AimPart=v end})
+Combat:CreateSlider({Name="FOV",Range={50,800},Callback=function(v)Config.FOV=v end})
+Combat:CreateSlider({Name="Smoothness",Range={0,100},Callback=function(v)Config.Smoothness=v/100 end})
 Combat:CreateToggle({Name="Team Check",Callback=function(v)Config.TeamCheck=v end})
 Combat:CreateToggle({Name="Wall Check",Callback=function(v)Config.WallCheck=v end})
 
 Visual:CreateToggle({Name="ESP",Callback=function(v)Config.ESP=v end})
 Visual:CreateToggle({Name="Show Team",Callback=function(v)Config.ShowTeam=v end})
 Visual:CreateToggle({Name="Tracer",Callback=function(v)Config.Tracer=v end})
+
+HitboxTab:CreateToggle({Name="Hitbox",Callback=function(v)Config.Hitbox=v end})
+HitboxTab:CreateSlider({Name="Size",Range={2,50},Callback=function(v)Config.HitboxSize=v end})
