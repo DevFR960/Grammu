@@ -10,118 +10,101 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --// CONFIG
 local Config = {
-    Aimbot=false,
-    AimPart="Head",
-    FOV=200,
-    Smoothness=0.2,
-    LockMode="Smooth",
-    TeamCheck=false,
+    Aimbot = false,
+    AimPart = "Head",
+    FOV = 200,
+    Smoothness = 0.15,
+    LockMode = "Smooth",
+    TeamCheck = false,
 
-    ESP=false,
-    ESPBox=true,
-    ESPText=true,
-    ESPHighlight=true,
+    Hitbox = false,
+    HitboxSize = 5,
 
-    Hitbox=false,
-    HitboxSize=5
+    ESP = false
 }
 
---// UI TOGGLE
-local UIVisible=true
-UIS.InputBegan:Connect(function(input,gp)
-    if gp then return end
-    if input.KeyCode==Enum.KeyCode.RightShift then
-        UIVisible=not UIVisible
+--// UI TOGGLE KEY
+local UIVisible = true
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        UIVisible = not UIVisible
         Rayfield:ToggleUI(UIVisible)
     end
 end)
 
---// CACHE
-local CachedPlayers={}
+--// PLAYER CACHE
+local CachedPlayers = {}
 task.spawn(function()
     while true do
-        CachedPlayers=Players:GetPlayers()
+        CachedPlayers = Players:GetPlayers()
         task.wait(1)
     end
 end)
 
---// TEAM
-local function IsEnemy(p)
-    if not p.Team or not LocalPlayer.Team then return true end
-    return p.Team ~= LocalPlayer.Team
+--// TEAM CHECK
+local function IsEnemy(player)
+    if not player.Team or not LocalPlayer.Team then return true end
+    return player.Team ~= LocalPlayer.Team
 end
 
-local function GetTeamColor(p)
-    if p.Team and p.Team.TeamColor then
-        return p.Team.TeamColor.Color
-    end
-    return Color3.fromRGB(255,255,255)
+--// ESP SYSTEM
+local ESP = {}
+
+local function CreateESP(player)
+    if player == LocalPlayer then return end
+
+    local gui = Instance.new("BillboardGui")
+    gui.Size = UDim2.new(4,0,5,0)
+    gui.AlwaysOnTop = true
+    gui.Enabled = false
+    gui.Parent = game.CoreGui
+
+    local text = Instance.new("TextLabel", gui)
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.TextScaled = true
+
+    ESP[player] = {GUI = gui, Text = text}
 end
 
---// ESP
-local ESP={}
-
-local function CreateESP(p)
-    if p==LocalPlayer then return end
-
-    local gui=Instance.new("BillboardGui")
-    gui.Size=UDim2.new(4,0,5,0)
-    gui.AlwaysOnTop=true
-    gui.Enabled=false
-    gui.Parent=game.CoreGui
-
-    local box=Instance.new("Frame",gui)
-    box.Size=UDim2.new(1,0,1,0)
-    box.BackgroundTransparency=1
-    box.BorderSizePixel=2
-
-    local text=Instance.new("TextLabel",gui)
-    text.Size=UDim2.new(1,0,0.5,0)
-    text.BackgroundTransparency=1
-    text.TextScaled=true
-
-    local hl=Instance.new("Highlight",game.CoreGui)
-    hl.Enabled=false
-
-    ESP[p]={GUI=gui,Box=box,Text=text,HL=hl}
+for _, player in pairs(Players:GetPlayers()) do
+    CreateESP(player)
 end
 
-for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
 
---// AIM FIX (สำคัญสุด)
-local CurrentTarget=nil
-local LastAim=0
+--// AIMBOT
+local CurrentTarget = nil
+local LastUpdate = 0
 
 local function GetTarget()
-    local closest=nil
-    local shortest=Config.FOV
+    local closest = nil
+    local shortest = Config.FOV * Config.FOV
 
-    for _,p in ipairs(CachedPlayers) do
-        if p~=LocalPlayer and p.Character then
+    for _, player in ipairs(CachedPlayers) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if not char then continue end
 
-            local char=p.Character
-            local hum=char:FindFirstChild("Humanoid")
+            local humanoid = char:FindFirstChild("Humanoid")
+            if not humanoid or humanoid.Health <= 0 then continue end
 
-            if hum and hum.Health>0 then
+            local part = char:FindFirstChild(Config.AimPart)
+            if not part then continue end
 
-                -- 🔥 เลือก part ตามที่ตั้ง (ไม่มี fallback แล้ว)
-                local part = char:FindFirstChild(Config.AimPart)
-                if not part then continue end
+            if Config.TeamCheck and not IsEnemy(player) then continue end
 
-                if Config.TeamCheck and not IsEnemy(p) then continue end
+            local pos, visible = Camera:WorldToViewportPoint(part.Position)
+            if not visible then continue end
 
-                local pos,onScreen=Camera:WorldToViewportPoint(part.Position)
+            local dx = pos.X - Camera.ViewportSize.X/2
+            local dy = pos.Y - Camera.ViewportSize.Y/2
+            local dist = dx*dx + dy*dy
 
-                if onScreen then
-                    local dist=(Vector2.new(pos.X,pos.Y) -
-                        Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-
-                    if dist < shortest then
-                        shortest = dist
-                        closest = part
-                    end
-                end
+            if dist < shortest then
+                shortest = dist
+                closest = part
             end
         end
     end
@@ -129,85 +112,124 @@ local function GetTarget()
     return closest
 end
 
+--// HITBOX
+local function UpdateHitbox(player)
+    if not player.Character then return end
+
+    local root = player.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    if Config.Hitbox and IsEnemy(player) then
+        root.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+        root.Transparency = 0.5
+        root.CanCollide = false
+    else
+        root.Size = Vector3.new(2,2,1)
+        root.Transparency = 1
+    end
+end
+
 --// MAIN LOOP
-local LastESP=0
+local LastESPUpdate = 0
 
 RunService.RenderStepped:Connect(function()
 
-    -- 🔥 AIM UPDATE
-    if tick()-LastAim > 0.1 then
+    -- Update target (optimized)
+    if tick() - LastUpdate > 0.15 then
         CurrentTarget = GetTarget()
-        LastAim = tick()
+        LastUpdate = tick()
     end
 
-    -- 🎯 AIM
+    -- Aimbot
     if Config.Aimbot and CurrentTarget then
         local aimPos = CurrentTarget.Position
 
-        -- 🔥 แก้หัวเบี้ยว
         if Config.AimPart == "Head" then
             aimPos = aimPos + Vector3.new(0,0.2,0)
         end
 
-        local cf = CFrame.lookAt(Camera.CFrame.Position, aimPos)
+        local newCF = CFrame.lookAt(Camera.CFrame.Position, aimPos)
 
-        if Config.LockMode=="Snap" then
-            Camera.CFrame = cf
+        if Config.LockMode == "Snap" then
+            Camera.CFrame = newCF
         else
-            Camera.CFrame = Camera.CFrame:Lerp(cf, Config.Smoothness)
+            Camera.CFrame = Camera.CFrame:Lerp(newCF, Config.Smoothness)
         end
     end
 
-    -- 👁️ ESP
-    if tick()-LastESP < 0.1 then return end
-    LastESP=tick()
+    -- ESP + Hitbox (optimized)
+    if tick() - LastESPUpdate < 0.2 then return end
+    LastESPUpdate = tick()
 
-    for _,p in ipairs(CachedPlayers) do
-        if p~=LocalPlayer and p.Character then
-            local char=p.Character
-            local head=char:FindFirstChild("Head")
-            local hum=char:FindFirstChild("Humanoid")
+    for _, player in ipairs(CachedPlayers) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local head = char:FindFirstChild("Head")
+            local humanoid = char:FindFirstChild("Humanoid")
 
-            local esp=ESP[p]
+            local esp = ESP[player]
 
-            if head and hum and esp then
-                if not Config.ESP or hum.Health<=0 then
-                    esp.GUI.Enabled=false
-                    esp.HL.Enabled=false
-                    continue
+            if head and humanoid and esp then
+                if Config.ESP and humanoid.Health > 0 then
+                    esp.GUI.Enabled = true
+                    esp.GUI.Adornee = head
+                    esp.Text.Text = player.Name
+                else
+                    esp.GUI.Enabled = false
                 end
-
-                local color=GetTeamColor(p)
-
-                esp.GUI.Adornee=head
-                esp.GUI.Enabled=true
-                esp.Text.Text=p.Name
-                esp.Text.TextColor3=color
-
-                esp.Box.BorderColor3=color
-                esp.Box.Visible=Config.ESPBox
-                esp.Text.Visible=Config.ESPText
-
-                esp.HL.Adornee=char
-                esp.HL.FillColor=color
-                esp.HL.OutlineColor=color
-                esp.HL.Enabled=Config.ESPHighlight
             end
+
+            -- Hitbox update
+            UpdateHitbox(player)
         end
     end
 
 end)
 
 --// UI
-local Window=Rayfield:CreateWindow({Name="COCO HUB FINAL LOCK"})
-local Combat=Window:CreateTab("Combat")
-local Visual=Window:CreateTab("Visual")
+local Window = Rayfield:CreateWindow({Name = "COCO HUB FINAL"})
+local Combat = Window:CreateTab("Combat")
+local Visual = Window:CreateTab("Visual")
+local HitboxTab = Window:CreateTab("Hitbox")
 
-Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Callback=function(v)Config.Aimbot=v end})
-Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},Callback=function(v)Config.AimPart=v end})
-Combat:CreateDropdown({Name="Lock Mode",Options={"Smooth","Snap"},Callback=function(v)Config.LockMode=v end})
+Combat:CreateToggle({
+    Name = "Aimbot",
+    CurrentValue = false,
+    Callback = function(v) Config.Aimbot = v end
+})
 
-Visual:CreateToggle({Name="ESP",CurrentValue=false,Callback=function(v)Config.ESP=v end})
-Visual:CreateToggle({Name="ESP Box",CurrentValue=true,Callback=function(v)Config.ESPBox=v end})
-Visual:CreateToggle({Name="ESP Text",CurrentValue=true,Callback=function(v)Config.ESPText=v end})
-Visual:CreateToggle({Name="ESP Highlight",CurrentValue=true,Callback=function(v)Config.ESPHighlight=v end})
+Combat:CreateDropdown({
+    Name = "Aim Part",
+    Options = {"Head","HumanoidRootPart"},
+    Callback = function(v) Config.AimPart = v end
+})
+
+Combat:CreateDropdown({
+    Name = "Lock Mode",
+    Options = {"Smooth","Snap"},
+    Callback = function(v) Config.LockMode = v end
+})
+
+Combat:CreateSlider({
+    Name = "Smoothness",
+    Range = {5,30},
+    Callback = function(v) Config.Smoothness = v/100 end
+})
+
+Visual:CreateToggle({
+    Name = "ESP",
+    CurrentValue = false,
+    Callback = function(v) Config.ESP = v end
+})
+
+HitboxTab:CreateToggle({
+    Name = "Hitbox",
+    CurrentValue = false,
+    Callback = function(v) Config.Hitbox = v end
+})
+
+HitboxTab:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {2,30},
+    Callback = function(v) Config.HitboxSize = v end
+})
