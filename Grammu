@@ -3,9 +3,13 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
 
---// UI
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+--// LOAD UI SAFE
+local success, Rayfield = pcall(function()
+    return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+if not success then warn("Rayfield Load Failed") return end
 
 --// CONFIG
 local Config = {
@@ -13,11 +17,14 @@ local Config = {
     AimPart="Head",
     FOV=200,
     ShowFOV=true,
+    Smoothness=0.2,
+    Prediction=0.12,
 
     TeamCheck=true,
     WallCheck=true,
 
     ESP=false,
+    TargetESP=true,
     TextESP=true,
     Tracer=false,
     Highlight=true,
@@ -58,7 +65,7 @@ local function IsVisible(part,char)
     local direction=(part.Position-origin)
 
     local params=RaycastParams.new()
-    params.FilterDescendantsInstances={LocalPlayer.Character}
+    params.FilterDescendantsInstances={LocalPlayer.Character,char}
     params.FilterType=Enum.RaycastFilterType.Blacklist
 
     local result=workspace:Raycast(origin,direction,params)
@@ -68,10 +75,12 @@ local function IsVisible(part,char)
     return true
 end
 
---// LOCK
+--// TARGET
 local LockedTarget=nil
 
 local function GetTarget()
+    if LockedTarget and LockedTarget.Parent then return end
+
     local closest=nil
     local shortest=Config.FOV*Config.FOV
 
@@ -128,6 +137,16 @@ end
 for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
 
+--// FIX MEMORY LEAK
+Players.PlayerRemoving:Connect(function(p)
+    if ESP[p] then
+        if ESP[p].GUI then ESP[p].GUI:Destroy() end
+        if ESP[p].Tracer then ESP[p].Tracer:Remove() end
+        if ESP[p].HL then ESP[p].HL:Destroy() end
+        ESP[p]=nil
+    end
+end)
+
 --// LOOP
 local LastTarget=0
 local LastESP=0
@@ -139,7 +158,11 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
     FOVCircle.Visible=Config.ShowFOV and Config.Aimbot
 
-    -- TARGET DELAY
+    if Config.Rainbow then
+        FOVCircle.Color=Color3.fromHSV((tick()%5)/5,1,1)
+    end
+
+    -- TARGET
     if tick()-LastTarget>0.1 then
         GetTarget()
         LastTarget=tick()
@@ -147,19 +170,25 @@ RunService.RenderStepped:Connect(function()
 
     -- AIMBOT
     if Config.Aimbot and LockedTarget then
-        local pos,vis=Camera:WorldToViewportPoint(LockedTarget.Position)
+        local velocity=LockedTarget.Velocity or Vector3.new()
+        local predicted=LockedTarget.Position + velocity * Config.Prediction
+
+        local pos,vis=Camera:WorldToViewportPoint(predicted)
         if vis then
             local dx=pos.X-Camera.ViewportSize.X/2
             local dy=pos.Y-Camera.ViewportSize.Y/2
             local dist=dx*dx+dy*dy
 
             if dist<=Config.FOV*Config.FOV then
-                Camera.CFrame=CFrame.lookAt(Camera.CFrame.Position,LockedTarget.Position)
+                Camera.CFrame = Camera.CFrame:Lerp(
+                    CFrame.lookAt(Camera.CFrame.Position,predicted),
+                    Config.Smoothness
+                )
             end
         end
     end
 
-    -- ESP DELAY
+    -- ESP
     if tick()-LastESP>0.2 then
         LastESP=tick()
 
@@ -172,14 +201,15 @@ RunService.RenderStepped:Connect(function()
 
                 if not esp then continue end
 
-                if not Config.ESP or not hum or hum.Health<=0 then
+                local isTarget = (LockedTarget and head == LockedTarget)
+
+                if not Config.ESP or not hum or hum.Health<=0 or (Config.TargetESP and not isTarget) then
                     esp.GUI.Enabled=false
                     esp.Tracer.Visible=false
                     esp.HL.Enabled=false
                 else
                     local hp=math.floor(hum.Health)
                     local dist=math.floor((head.Position-Camera.CFrame.Position).Magnitude)
-                    local team=p.Team and p.Team.Name or "NoTeam"
 
                     local color=Config.ESPColor
 
@@ -191,11 +221,15 @@ RunService.RenderStepped:Connect(function()
                         color=Color3.fromHSV((tick()%5)/5,1,1)
                     end
 
+                    if isTarget then
+                        color=Color3.fromRGB(255,255,0)
+                    end
+
                     -- TEXT
                     if Config.TextESP and head then
                         esp.GUI.Adornee=head
                         esp.GUI.Enabled=true
-                        esp.Text.Text=p.Name.." ["..team.."]\nHP:"..hp.." | "..dist.."m"
+                        esp.Text.Text="🎯 "..p.Name.." | HP:"..hp.." | "..dist.."m"
                         esp.Text.TextColor3=color
                     else
                         esp.GUI.Enabled=false
@@ -233,7 +267,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --// UI
-local Window=Rayfield:CreateWindow({Name="SINEX_X HUB "})
+local Window=Rayfield:CreateWindow({Name="COCO HUB"})
 local Combat=Window:CreateTab("Combat")
 local Visual=Window:CreateTab("Visual")
 
@@ -241,18 +275,22 @@ Combat:CreateToggle({Name="Aimbot",Callback=function(v)Config.Aimbot=v end})
 Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},Callback=function(v)Config.AimPart=v end})
 
 Visual:CreateToggle({Name="ESP",Callback=function(v)Config.ESP=v end})
+Visual:CreateToggle({Name="Target ESP",Callback=function(v)Config.TargetESP=v end})
 Visual:CreateToggle({Name="Text ESP",Callback=function(v)Config.TextESP=v end})
 Visual:CreateToggle({Name="Tracer",Callback=function(v)Config.Tracer=v end})
 Visual:CreateToggle({Name="Highlight",Callback=function(v)Config.Highlight=v end})
 Visual:CreateToggle({Name="Show FOV",Callback=function(v)Config.ShowFOV=v end})
 
 Visual:CreateToggle({Name="Team Color",Callback=function(v)Config.TeamColor=v end})
-Visual:CreateToggle({Name="Rainbow ESP",Callback=function(v)Config.Rainbow=v end})
+Visual:CreateToggle({Name="Rainbow",Callback=function(v)Config.Rainbow=v end})
 
 Visual:CreateSlider({Name="FOV Size",Range={50,400},Callback=function(v)Config.FOV=v end})
+Visual:CreateSlider({Name="Smoothness",Range={0,1},Increment=0.05,Callback=function(v)Config.Smoothness=v end})
 
-Visual:CreateColorPicker({
-    Name="ESP Color",
-    Color=Color3.fromRGB(255,0,0),
-    Callback=function(v)Config.ESPColor=v end
-})
+--// TOGGLE GUI
+local ToggleKey=Enum.KeyCode.RightControl
+UIS.InputBegan:Connect(function(input,gp)
+    if not gp and input.KeyCode==ToggleKey then
+        Rayfield:Toggle()
+    end
+end)
