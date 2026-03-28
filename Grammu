@@ -15,10 +15,10 @@ if not success then warn("Rayfield Load Failed") return end
 local Config = {
     Aimbot=false,
     AimPart="Head",
-    FOV=200,
+    FOV=250,
     ShowFOV=true,
-    Smoothness=0.2,
-    Prediction=0.12,
+    Smoothness=0.15,
+    Prediction=0.08,
 
     TeamCheck=true,
     WallCheck=true,
@@ -75,12 +75,10 @@ local function IsVisible(part,char)
     return true
 end
 
---// TARGET
+--// TARGET (FIXED)
 local LockedTarget=nil
 
 local function GetTarget()
-    if LockedTarget and LockedTarget.Parent then return end
-
     local closest=nil
     local shortest=Config.FOV*Config.FOV
 
@@ -88,7 +86,7 @@ local function GetTarget()
         if p~=LocalPlayer and p.Character then
             local char=p.Character
             local hum=char:FindFirstChild("Humanoid")
-            local part=char:FindFirstChild(Config.AimPart)
+            local part=char:FindFirstChild(Config.AimPart) or char:FindFirstChild("HumanoidRootPart")
 
             if hum and hum.Health>0 and part and IsEnemy(p) and IsVisible(part,char) then
                 local pos,vis=Camera:WorldToViewportPoint(part.Position)
@@ -137,7 +135,7 @@ end
 for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
 
---// FIX MEMORY LEAK
+--// REMOVE ESP
 Players.PlayerRemoving:Connect(function(p)
     if ESP[p] then
         if ESP[p].GUI then ESP[p].GUI:Destroy() end
@@ -162,30 +160,21 @@ RunService.RenderStepped:Connect(function()
         FOVCircle.Color=Color3.fromHSV((tick()%5)/5,1,1)
     end
 
-    -- TARGET
-    if tick()-LastTarget>0.1 then
+    -- TARGET UPDATE (เร็วขึ้น)
+    if tick()-LastTarget>0.05 then
         GetTarget()
         LastTarget=tick()
     end
 
-    -- AIMBOT
+    -- AIMBOT (FIXED LOCK)
     if Config.Aimbot and LockedTarget then
         local velocity=LockedTarget.Velocity or Vector3.new()
         local predicted=LockedTarget.Position + velocity * Config.Prediction
 
-        local pos,vis=Camera:WorldToViewportPoint(predicted)
-        if vis then
-            local dx=pos.X-Camera.ViewportSize.X/2
-            local dy=pos.Y-Camera.ViewportSize.Y/2
-            local dist=dx*dx+dy*dy
-
-            if dist<=Config.FOV*Config.FOV then
-                Camera.CFrame = Camera.CFrame:Lerp(
-                    CFrame.lookAt(Camera.CFrame.Position,predicted),
-                    Config.Smoothness
-                )
-            end
-        end
+        Camera.CFrame = Camera.CFrame:Lerp(
+            CFrame.lookAt(Camera.CFrame.Position,predicted),
+            Config.Smoothness
+        )
     end
 
     -- ESP
@@ -225,7 +214,6 @@ RunService.RenderStepped:Connect(function()
                         color=Color3.fromRGB(255,255,0)
                     end
 
-                    -- TEXT
                     if Config.TextESP and head then
                         esp.GUI.Adornee=head
                         esp.GUI.Enabled=true
@@ -235,7 +223,6 @@ RunService.RenderStepped:Connect(function()
                         esp.GUI.Enabled=false
                     end
 
-                    -- TRACER
                     if Config.Tracer and head then
                         local pos,vis=Camera:WorldToViewportPoint(head.Position)
                         if vis then
@@ -250,7 +237,6 @@ RunService.RenderStepped:Connect(function()
                         esp.Tracer.Visible=false
                     end
 
-                    -- HIGHLIGHT
                     if Config.Highlight then
                         esp.HL.Adornee=char
                         esp.HL.FillColor=color
