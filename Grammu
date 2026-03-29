@@ -5,278 +5,254 @@ local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 local UIS = game:GetService("UserInputService")
 
---// LOAD UI SAFE
+--// LOAD UI
 local success, Rayfield = pcall(function()
     return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 end)
 if not success then warn("Rayfield Load Failed") return end
 
+--// WINDOW
+local Window = Rayfield:CreateWindow({Name = "COCO HUB"})
+local Combat = Window:CreateTab("Combat")
+local Visual = Window:CreateTab("Visual")
+
+--// BACKGROUND
+local bg = Instance.new("ImageLabel")
+bg.Parent = Window.UI
+bg.Size = UDim2.new(1,0,1,0)
+bg.BackgroundTransparency = 1
+bg.Image = "rbxassetid://99121578036671"
+bg.ImageTransparency = 0.5
+bg.ScaleType = Enum.ScaleType.Crop
+bg.ZIndex = 0
+bg.ImageColor3 = Color3.fromRGB(140,140,140)
+
 --// CONFIG
 local Config = {
-    Aimbot=false,
-    AimPart="Head",
-    FOV=250,
-    ShowFOV=true,
-    Smoothness=0.15,
-    Prediction=0.08,
+    Aimbot = false,
+    AimPart = "Head",
+    FOV = 250,
+    ShowFOV = true,
+    Smoothness = 0.15,
+    Prediction = 0.08,
 
-    TeamCheck=true,
-    WallCheck=true,
+    TeamCheck = true,
+    WallCheck = true,
 
-    ESP=false,
-    TargetESP=true,
-    TextESP=true,
-    Tracer=false,
-    Highlight=true,
+    ESP = false,
+    TargetESP = true,
+    TextESP = true,
+    Tracer = false,
+    Highlight = true,
 
-    ESPColor=Color3.fromRGB(255,0,0),
-    TeamColor=true,
-    Rainbow=false
+    ESPColor = Color3.fromRGB(255,0,0),
+    TeamColor = true,
+    Rainbow = false
 }
 
 --// CACHE
-local CachedPlayers={}
+local CachedPlayers = {}
 task.spawn(function()
     while true do
-        CachedPlayers=Players:GetPlayers()
+        CachedPlayers = Players:GetPlayers()
         task.wait(1)
     end
 end)
 
---// FOV
-local FOVCircle=Drawing.new("Circle")
-FOVCircle.Thickness=2
-FOVCircle.NumSides=50
-FOVCircle.Filled=false
-FOVCircle.Color=Color3.fromRGB(0,255,255)
+--// FOV CIRCLE
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 50
+FOVCircle.Filled = false
+FOVCircle.Color = Color3.fromRGB(0,255,255)
 
---// TEAM
+--// TEAM CHECK
 local function IsEnemy(p)
     if not Config.TeamCheck then return true end
     if not p.Team or not LocalPlayer.Team then return true end
-    return p.Team~=LocalPlayer.Team
+    return p.Team ~= LocalPlayer.Team
 end
 
 --// WALL CHECK
-local function IsVisible(part,char)
+local function IsVisible(part, char)
     if not Config.WallCheck then return true end
 
-    local origin=Camera.CFrame.Position
-    local direction=(part.Position-origin)
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin)
 
-    local params=RaycastParams.new()
-    params.FilterDescendantsInstances={LocalPlayer.Character,char}
-    params.FilterType=Enum.RaycastFilterType.Blacklist
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character, char}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
 
-    local result=workspace:Raycast(origin,direction,params)
+    local result = workspace:Raycast(origin, direction, params)
     if result then
         return result.Instance:IsDescendantOf(char)
     end
     return true
 end
 
---// TARGET (FIXED)
-local LockedTarget=nil
+--// TARGET
+local LockedTarget = nil
 
 local function GetTarget()
-    local closest=nil
-    local shortest=Config.FOV*Config.FOV
+    local closest = nil
+    local shortest = Config.FOV * Config.FOV
 
     for _,p in pairs(CachedPlayers) do
-        if p~=LocalPlayer and p.Character then
-            local char=p.Character
-            local hum=char:FindFirstChild("Humanoid")
-            local part=char:FindFirstChild(Config.AimPart) or char:FindFirstChild("HumanoidRootPart")
+        if p ~= LocalPlayer and p.Character then
+            local char = p.Character
+            local hum = char:FindFirstChild("Humanoid")
+            local part = char:FindFirstChild(Config.AimPart) or char:FindFirstChild("HumanoidRootPart")
 
-            if hum and hum.Health>0 and part and IsEnemy(p) and IsVisible(part,char) then
-                local pos,vis=Camera:WorldToViewportPoint(part.Position)
+            if hum and hum.Health > 0 and part and IsEnemy(p) and IsVisible(part, char) then
+                local pos, vis = Camera:WorldToViewportPoint(part.Position)
                 if vis then
-                    local dx=pos.X-Camera.ViewportSize.X/2
-                    local dy=pos.Y-Camera.ViewportSize.Y/2
-                    local dist=dx*dx+dy*dy
+                    local dx = pos.X - Camera.ViewportSize.X/2
+                    local dy = pos.Y - Camera.ViewportSize.Y/2
+                    local dist = dx*dx + dy*dy
 
-                    if dist<shortest then
-                        shortest=dist
-                        closest=part
+                    if dist < shortest then
+                        shortest = dist
+                        closest = part
                     end
                 end
             end
         end
     end
 
-    LockedTarget=closest
+    LockedTarget = closest
 end
 
 --// ESP
-local ESP={}
+local ESP = {}
 
 local function CreateESP(p)
-    if p==LocalPlayer then return end
+    if p == LocalPlayer then return end
 
-    local gui=Instance.new("BillboardGui")
-    gui.Size=UDim2.new(4,0,5,0)
-    gui.AlwaysOnTop=true
-    gui.Parent=game.CoreGui
+    local gui = Instance.new("BillboardGui")
+    gui.Size = UDim2.new(4,0,5,0)
+    gui.AlwaysOnTop = true
+    gui.Parent = game.CoreGui
 
-    local text=Instance.new("TextLabel",gui)
-    text.Size=UDim2.new(1,0,1,0)
-    text.BackgroundTransparency=1
-    text.TextScaled=true
+    local text = Instance.new("TextLabel", gui)
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.TextScaled = true
 
-    local tracer=Drawing.new("Line")
-    tracer.Thickness=2
+    local tracer = Drawing.new("Line")
+    tracer.Thickness = 2
 
-    local hl=Instance.new("Highlight")
-    hl.Parent=game.CoreGui
+    local hl = Instance.new("Highlight")
+    hl.Parent = game.CoreGui
 
-    ESP[p]={GUI=gui,Text=text,Tracer=tracer,HL=hl}
+    ESP[p] = {GUI=gui, Text=text, Tracer=tracer, HL=hl}
 end
 
 for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
 
---// REMOVE ESP
 Players.PlayerRemoving:Connect(function(p)
     if ESP[p] then
         if ESP[p].GUI then ESP[p].GUI:Destroy() end
         if ESP[p].Tracer then ESP[p].Tracer:Remove() end
         if ESP[p].HL then ESP[p].HL:Destroy() end
-        ESP[p]=nil
+        ESP[p] = nil
     end
 end)
 
 --// LOOP
-local LastTarget=0
-local LastESP=0
-
 RunService.RenderStepped:Connect(function()
 
     -- FOV
-    FOVCircle.Radius=Config.FOV
-    FOVCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
-    FOVCircle.Visible=Config.ShowFOV and Config.Aimbot
+    FOVCircle.Radius = Config.FOV
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FOVCircle.Visible = Config.ShowFOV and Config.Aimbot
 
     if Config.Rainbow then
-        FOVCircle.Color=Color3.fromHSV((tick()%5)/5,1,1)
+        FOVCircle.Color = Color3.fromHSV((tick()%5)/5,1,1)
     end
 
-    -- TARGET UPDATE (เร็วขึ้น)
-    if tick()-LastTarget>0.05 then
-        GetTarget()
-        LastTarget=tick()
-    end
+    -- TARGET
+    GetTarget()
 
-    -- AIMBOT (FIXED LOCK)
+    -- AIMBOT
     if Config.Aimbot and LockedTarget then
-        local velocity=LockedTarget.Velocity or Vector3.new()
-        local predicted=LockedTarget.Position + velocity * Config.Prediction
+        local velocity = LockedTarget.Velocity or Vector3.new()
+        local predicted = LockedTarget.Position + velocity * Config.Prediction
 
         Camera.CFrame = Camera.CFrame:Lerp(
-            CFrame.lookAt(Camera.CFrame.Position,predicted),
+            CFrame.lookAt(Camera.CFrame.Position, predicted),
             Config.Smoothness
         )
     end
 
     -- ESP
-    if tick()-LastESP>0.2 then
-        LastESP=tick()
+    for _,p in pairs(CachedPlayers) do
+        if p ~= LocalPlayer and p.Character then
+            local char = p.Character
+            local head = char:FindFirstChild("Head")
+            local hum = char:FindFirstChild("Humanoid")
+            local esp = ESP[p]
 
-        for _,p in pairs(CachedPlayers) do
-            if p~=LocalPlayer and p.Character then
-                local char=p.Character
-                local head=char:FindFirstChild("Head")
-                local hum=char:FindFirstChild("Humanoid")
-                local esp=ESP[p]
+            if not esp then continue end
 
-                if not esp then continue end
+            local isTarget = (LockedTarget and head == LockedTarget)
 
-                local isTarget = (LockedTarget and head == LockedTarget)
+            if not Config.ESP or not hum or hum.Health <= 0 or (Config.TargetESP and not isTarget) then
+                esp.GUI.Enabled = false
+                esp.Tracer.Visible = false
+                esp.HL.Enabled = false
+            else
+                local hp = math.floor(hum.Health)
+                local dist = math.floor((head.Position - Camera.CFrame.Position).Magnitude)
 
-                if not Config.ESP or not hum or hum.Health<=0 or (Config.TargetESP and not isTarget) then
-                    esp.GUI.Enabled=false
-                    esp.Tracer.Visible=false
-                    esp.HL.Enabled=false
+                local color = Config.ESPColor
+
+                if Config.TeamColor and p.Team and p.Team.TeamColor then
+                    color = p.Team.TeamColor.Color
+                end
+
+                if Config.Rainbow then
+                    color = Color3.fromHSV((tick()%5)/5,1,1)
+                end
+
+                if isTarget then
+                    color = Color3.fromRGB(255,255,0)
+                end
+
+                if Config.TextESP and head then
+                    esp.GUI.Adornee = head
+                    esp.GUI.Enabled = true
+                    esp.Text.Text = "TARGET: "..p.Name.." | HP:"..hp.." | "..dist.."m"
+                    esp.Text.TextColor3 = color
                 else
-                    local hp=math.floor(hum.Health)
-                    local dist=math.floor((head.Position-Camera.CFrame.Position).Magnitude)
+                    esp.GUI.Enabled = false
+                end
 
-                    local color=Config.ESPColor
-
-                    if Config.TeamColor and p.Team and p.Team.TeamColor then
-                        color=p.Team.TeamColor.Color
-                    end
-
-                    if Config.Rainbow then
-                        color=Color3.fromHSV((tick()%5)/5,1,1)
-                    end
-
-                    if isTarget then
-                        color=Color3.fromRGB(255,255,0)
-                    end
-
-                    if Config.TextESP and head then
-                        esp.GUI.Adornee=head
-                        esp.GUI.Enabled=true
-                        esp.Text.Text="🎯 "..p.Name.." | HP:"..hp.." | "..dist.."m"
-                        esp.Text.TextColor3=color
-                    else
-                        esp.GUI.Enabled=false
-                    end
-
-                    if Config.Tracer and head then
-                        local pos,vis=Camera:WorldToViewportPoint(head.Position)
-                        if vis then
-                            esp.Tracer.From=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
-                            esp.Tracer.To=Vector2.new(pos.X,pos.Y)
-                            esp.Tracer.Color=color
-                            esp.Tracer.Visible=true
-                        else
-                            esp.Tracer.Visible=false
-                        end
-                    else
-                        esp.Tracer.Visible=false
-                    end
-
-                    if Config.Highlight then
-                        esp.HL.Adornee=char
-                        esp.HL.FillColor=color
-                        esp.HL.OutlineColor=color
-                        esp.HL.Enabled=true
-                    else
-                        esp.HL.Enabled=false
-                    end
+                if Config.Highlight then
+                    esp.HL.Adornee = char
+                    esp.HL.FillColor = color
+                    esp.HL.OutlineColor = color
+                    esp.HL.Enabled = true
+                else
+                    esp.HL.Enabled = false
                 end
             end
         end
     end
-
 end)
 
 --// UI
-local Window=Rayfield:CreateWindow({Name="COCO HUB"})
-local Combat=Window:CreateTab("Combat")
-local Visual=Window:CreateTab("Visual")
-
 Combat:CreateToggle({Name="Aimbot",Callback=function(v)Config.Aimbot=v end})
 Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},Callback=function(v)Config.AimPart=v end})
 
 Visual:CreateToggle({Name="ESP",Callback=function(v)Config.ESP=v end})
 Visual:CreateToggle({Name="Target ESP",Callback=function(v)Config.TargetESP=v end})
-Visual:CreateToggle({Name="Text ESP",Callback=function(v)Config.TextESP=v end})
-Visual:CreateToggle({Name="Tracer",Callback=function(v)Config.Tracer=v end})
-Visual:CreateToggle({Name="Highlight",Callback=function(v)Config.Highlight=v end})
 Visual:CreateToggle({Name="Show FOV",Callback=function(v)Config.ShowFOV=v end})
 
-Visual:CreateToggle({Name="Team Color",Callback=function(v)Config.TeamColor=v end})
-Visual:CreateToggle({Name="Rainbow",Callback=function(v)Config.Rainbow=v end})
-
-Visual:CreateSlider({Name="FOV Size",Range={50,400},Callback=function(v)Config.FOV=v end})
-Visual:CreateSlider({Name="Smoothness",Range={0,1},Increment=0.05,Callback=function(v)Config.Smoothness=v end})
-
 --// TOGGLE GUI
-local ToggleKey=Enum.KeyCode.RightControl
 UIS.InputBegan:Connect(function(input,gp)
-    if not gp and input.KeyCode==ToggleKey then
+    if not gp and input.KeyCode==Enum.KeyCode.RightControl then
         Rayfield:Toggle()
     end
 end)
