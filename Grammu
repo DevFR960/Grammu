@@ -16,16 +16,20 @@ if not ArrayField then return end
 
 --// CONFIG
 local Config = {
+    -- AIM
     Aimbot=false,
     AimPart="Head",
     Prediction=0.12,
 
+    -- FOV
     FOV=250,
     ShowFOV=true,
 
+    -- CHECKS
     TeamCheck=true,
     WallCheck=true,
 
+    -- ESP
     ESP=false,
     TextESP=true,
     Tracer=true,
@@ -33,20 +37,30 @@ local Config = {
     TeamColor=false,
     Rainbow=false,
 
+    -- HITBOX
     Hitbox=false,
     HitboxSize=10,
 
+    -- MOVEMENT (Mics)
+    WalkSpeed=16,
+    JumpPower=50,
+    Gravity=196,
+
+    SpeedEnabled=false,
+    JumpEnabled=false,
+    GravityEnabled=false,
+
+    -- COLORS
     Colors={
         FOV=Color3.fromRGB(0,255,255),
-        ESP=Color3.fromRGB(255,0,0),
-        Target=Color3.fromRGB(255,255,0)
+        ESP=Color3.fromRGB(255,0,0)
     }
 }
 
 local ESP = {}
 local LockedTarget
 
---// DRAWING SAFE
+--// DRAWING
 local FOVCircle=nil
 pcall(function()
     FOVCircle=Drawing.new("Circle")
@@ -104,6 +118,25 @@ local function ApplyHitbox(p)
     end
 end
 
+--// MOVEMENT
+local function ApplyMovement()
+    local char=LocalPlayer.Character
+    if not char then return end
+
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    -- SPEED
+    hum.WalkSpeed = Config.SpeedEnabled and Config.WalkSpeed or 16
+
+    -- JUMP
+    hum.UseJumpPower = true
+    hum.JumpPower = Config.JumpEnabled and Config.JumpPower or 50
+
+    -- GRAVITY
+    workspace.Gravity = Config.GravityEnabled and Config.Gravity or 196.2
+end
+
 --// CREATE ESP
 local function CreateESP(p)
     if p==LocalPlayer or ESP[p] then return end
@@ -150,6 +183,9 @@ RunService.RenderStepped:Connect(function()
         Camera.CFrame=CFrame.lookAt(Camera.CFrame.Position,pred)
     end
 
+    -- MOVEMENT
+    ApplyMovement()
+
     -- ESP + HITBOX
     for p,v in pairs(ESP) do
         if p.Character then
@@ -159,8 +195,7 @@ RunService.RenderStepped:Connect(function()
             ApplyHitbox(p)
 
             if Config.ESP and head then
-                local color=Config.Colors.ESP
-                if Config.TeamColor and p.TeamColor then color=p.TeamColor.Color end
+                local color=Config.TeamColor and p.TeamColor.Color or Config.Colors.ESP
                 if Config.Rainbow then color=Color3.fromHSV((tick()%5)/5,1,1) end
 
                 -- TEXT
@@ -205,13 +240,14 @@ end)
 
 --// UI
 local Window=ArrayField:CreateWindow({
-    Name="COCO HUB",
+    Name="COCO HUB | By SINEX_X",
     LoadingTitle="COCO HUB",
     LoadingSubtitle="By SINEX_X"
 })
 
 local Combat=Window:CreateTab("Combat")
 local Visual=Window:CreateTab("Visual")
+local Mics=Window:CreateTab("Mics")
 
 -- COMBAT
 Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Callback=function(v)Config.Aimbot=v end})
@@ -228,14 +264,26 @@ Visual:CreateToggle({Name="Rainbow",CurrentValue=false,Callback=function(v)Confi
 
 Visual:CreateSlider({Name="FOV Size",Range={50,800},Increment=10,CurrentValue=250,Callback=function(v)Config.FOV=v end})
 
--- HITBOX
 Visual:CreateToggle({Name="Hitbox",CurrentValue=false,Callback=function(v)Config.Hitbox=v end})
 Visual:CreateSlider({Name="Hitbox Size",Range={2,500},Increment=1,CurrentValue=10,Callback=function(v)Config.HitboxSize=v end})
 
--- COLORS
 Visual:CreateColorPicker({Name="FOV Color",Color=Config.Colors.FOV,Callback=function(v)Config.Colors.FOV=v end})
 Visual:CreateColorPicker({Name="ESP Color",Color=Config.Colors.ESP,Callback=function(v)Config.Colors.ESP=v end})
+
+-- MICS
+Mics:CreateToggle({Name="Speed",CurrentValue=false,Callback=function(v)Config.SpeedEnabled=v end})
+Mics:CreateSlider({Name="WalkSpeed",Range={16,500},Increment=1,CurrentValue=16,Callback=function(v)Config.WalkSpeed=v end})
+
+Mics:CreateToggle({Name="Jump Power",CurrentValue=false,Callback=function(v)Config.JumpEnabled=v end})
+Mics:CreateSlider({Name="Jump Height",Range={50,500},Increment=1,CurrentValue=50,Callback=function(v)Config.JumpPower=v end})
+
+Mics:CreateToggle({Name="Gravity",CurrentValue=false,Callback=function(v)Config.GravityEnabled=v end})
+Mics:CreateSlider({Name="Gravity Value",Range={0,1000},Increment=10,CurrentValue=196,Callback=function(v)Config.Gravity=v end})
 
 -- INIT
 for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+end)
