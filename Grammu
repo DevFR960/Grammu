@@ -205,9 +205,9 @@ end)
 
 --// UI
 local Window=ArrayField:CreateWindow({
-    Name="COCO HUB | FULL SYSTEM",
+    Name="COCO HUB",
     LoadingTitle="COCO HUB",
-    LoadingSubtitle="Ultimate"
+    LoadingSubtitle="By SINEX_X"
 })
 
 local Combat=Window:CreateTab("Combat")
