@@ -16,20 +16,16 @@ if not ArrayField then return end
 
 --// CONFIG
 local Config = {
-    -- AIM
     Aimbot=false,
     AimPart="Head",
     Prediction=0.12,
 
-    -- FOV
     FOV=250,
     ShowFOV=true,
 
-    -- CHECKS
     TeamCheck=true,
     WallCheck=true,
 
-    -- ESP
     ESP=false,
     TextESP=true,
     Tracer=true,
@@ -37,11 +33,9 @@ local Config = {
     TeamColor=false,
     Rainbow=false,
 
-    -- HITBOX
     Hitbox=false,
     HitboxSize=10,
 
-    -- MOVEMENT (Mics)
     WalkSpeed=16,
     JumpPower=50,
     Gravity=196,
@@ -50,7 +44,6 @@ local Config = {
     JumpEnabled=false,
     GravityEnabled=false,
 
-    -- COLORS
     Colors={
         FOV=Color3.fromRGB(0,255,255),
         ESP=Color3.fromRGB(255,0,0)
@@ -81,12 +74,30 @@ local function IsEnemy(p)
     return p.Team~=LocalPlayer.Team
 end
 
+-- ✅ WALLCHECK
+local function IsVisible(part, char)
+    if not Config.WallCheck then return true end
+
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin)
+
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character, char}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local result = workspace:Raycast(origin, direction, params)
+    return result == nil or result.Instance:IsDescendantOf(char)
+end
+
+-- TARGET
 local function GetTarget()
     local closest,shortest=nil,Config.FOV
+
     for _,p in pairs(Players:GetPlayers()) do
         if p~=LocalPlayer and p.Character then
             local part=p.Character:FindFirstChild(Config.AimPart)
-            if part and IsEnemy(p) then
+
+            if part and IsEnemy(p) and IsVisible(part, p.Character) then
                 local pos,vis=Camera:WorldToViewportPoint(part.Position)
                 if vis then
                     local dist=(Vector2.new(pos.X,pos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
@@ -98,10 +109,11 @@ local function GetTarget()
             end
         end
     end
+
     LockedTarget=closest
 end
 
---// HITBOX
+-- HITBOX
 local function ApplyHitbox(p)
     if not p.Character then return end
     local root=p.Character:FindFirstChild("HumanoidRootPart")
@@ -118,7 +130,7 @@ local function ApplyHitbox(p)
     end
 end
 
---// MOVEMENT
+-- MOVEMENT
 local function ApplyMovement()
     local char=LocalPlayer.Character
     if not char then return end
@@ -126,18 +138,13 @@ local function ApplyMovement()
     local hum=char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
-    -- SPEED
     hum.WalkSpeed = Config.SpeedEnabled and Config.WalkSpeed or 16
-
-    -- JUMP
     hum.UseJumpPower = true
     hum.JumpPower = Config.JumpEnabled and Config.JumpPower or 50
-
-    -- GRAVITY
     workspace.Gravity = Config.GravityEnabled and Config.Gravity or 196.2
 end
 
---// CREATE ESP
+-- CREATE ESP
 local function CreateESP(p)
     if p==LocalPlayer or ESP[p] then return end
 
@@ -163,7 +170,7 @@ local function CreateESP(p)
     ESP[p]={GUI=gui,Text=text,Tracer=tracer,HL=hl}
 end
 
---// LOOP
+-- LOOP
 RunService.RenderStepped:Connect(function()
 
     -- FOV
@@ -183,10 +190,8 @@ RunService.RenderStepped:Connect(function()
         Camera.CFrame=CFrame.lookAt(Camera.CFrame.Position,pred)
     end
 
-    -- MOVEMENT
     ApplyMovement()
 
-    -- ESP + HITBOX
     for p,v in pairs(ESP) do
         if p.Character then
             local char=p.Character
@@ -198,7 +203,6 @@ RunService.RenderStepped:Connect(function()
                 local color=Config.TeamColor and p.TeamColor.Color or Config.Colors.ESP
                 if Config.Rainbow then color=Color3.fromHSV((tick()%5)/5,1,1) end
 
-                -- TEXT
                 if Config.TextESP then
                     v.GUI.Adornee=head
                     v.GUI.Enabled=true
@@ -208,7 +212,6 @@ RunService.RenderStepped:Connect(function()
                     v.GUI.Enabled=false
                 end
 
-                -- TRACER
                 if v.Tracer and Config.Tracer then
                     local pos,vis=Camera:WorldToViewportPoint(head.Position)
                     if vis and InFOV(pos) then
@@ -221,7 +224,6 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
 
-                -- HIGHLIGHT
                 if Config.Highlight then
                     v.HL.Adornee=char
                     v.HL.FillColor=color
@@ -238,7 +240,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// UI
+-- UI
 local Window=ArrayField:CreateWindow({
     Name="COCO HUB | By SINEX_X",
     LoadingTitle="COCO HUB",
@@ -251,6 +253,7 @@ local Mics=Window:CreateTab("Mics")
 
 -- COMBAT
 Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Callback=function(v)Config.Aimbot=v end})
+Combat:CreateToggle({Name="Wall Check",CurrentValue=true,Callback=function(v)Config.WallCheck=v end})
 Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},CurrentOption="Head",Callback=function(v)Config.AimPart=v end})
 Combat:CreateSlider({Name="Prediction",Range={0,0.5},Increment=0.01,CurrentValue=0.12,Callback=function(v)Config.Prediction=v end})
 
@@ -283,7 +286,3 @@ Mics:CreateSlider({Name="Gravity Value",Range={0,1000},Increment=10,CurrentValue
 -- INIT
 for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
 Players.PlayerAdded:Connect(CreateESP)
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-end)
