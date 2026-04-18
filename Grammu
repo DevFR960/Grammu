@@ -31,6 +31,7 @@ local Config = {
     Tracer=true,
     Highlight=true,
     TeamColor=false,
+    Rainbow=false,
 
     Hitbox=false,
     HitboxSize=10,
@@ -52,29 +53,31 @@ local Config = {
 local ESP = {}
 local LockedTarget
 
---// TEAMCHECK (FULL)
-local function IsEnemy(p)
-    if p == LocalPlayer then return false end
-    if not Config.TeamCheck then return true end
+--// DRAWING
+local FOVCircle=nil
+pcall(function()
+    FOVCircle=Drawing.new("Circle")
+    FOVCircle.Thickness=2
+    FOVCircle.NumSides=60
+    FOVCircle.Filled=false
+end)
 
-    if LocalPlayer.Team and p.Team and p.Team == LocalPlayer.Team then return false end
-    if LocalPlayer.TeamColor and p.TeamColor and p.TeamColor == LocalPlayer.TeamColor then return false end
-
-    local ls1 = LocalPlayer:FindFirstChild("leaderstats")
-    local ls2 = p:FindFirstChild("leaderstats")
-    if ls1 and ls2 then
-        for _,v in pairs(ls1:GetChildren()) do
-            local ev = ls2:FindFirstChild(v.Name)
-            if ev and ev.Value == v.Value then return false end
-        end
-    end
-
-    return true
+--// FUNCTIONS
+local function InFOV(pos)
+    local c=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+    return (Vector2.new(pos.X,pos.Y)-c).Magnitude<=Config.FOV
 end
 
---// WALLCHECK
+local function IsEnemy(p)
+    if not Config.TeamCheck then return true end
+    if not p.Team or not LocalPlayer.Team then return true end
+    return p.Team~=LocalPlayer.Team
+end
+
+-- ✅ WALLCHECK
 local function IsVisible(part, char)
     if not Config.WallCheck then return true end
+
     local origin = Camera.CFrame.Position
     local direction = (part.Position - origin)
 
@@ -86,52 +89,53 @@ local function IsVisible(part, char)
     return result == nil or result.Instance:IsDescendantOf(char)
 end
 
---// TARGET
+-- TARGET
 local function GetTarget()
-    local closest, shortest = nil, Config.FOV
+    local closest,shortest=nil,Config.FOV
 
     for _,p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local part = p.Character:FindFirstChild(Config.AimPart)
+        if p~=LocalPlayer and p.Character then
+            local part=p.Character:FindFirstChild(Config.AimPart)
+
             if part and IsEnemy(p) and IsVisible(part, p.Character) then
-                local pos, vis = Camera:WorldToViewportPoint(part.Position)
+                local pos,vis=Camera:WorldToViewportPoint(part.Position)
                 if vis then
-                    local dist = (Vector2.new(pos.X,pos.Y) - Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-                    if dist < shortest then
-                        shortest = dist
-                        closest = part
+                    local dist=(Vector2.new(pos.X,pos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+                    if dist<shortest then
+                        shortest=dist
+                        closest=part
                     end
                 end
             end
         end
     end
 
-    LockedTarget = closest
+    LockedTarget=closest
 end
 
---// HITBOX
+-- HITBOX
 local function ApplyHitbox(p)
     if not p.Character then return end
-    local root = p.Character:FindFirstChild("HumanoidRootPart")
+    local root=p.Character:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
     if Config.Hitbox then
-        root.Size = Vector3.new(Config.HitboxSize,Config.HitboxSize,Config.HitboxSize)
-        root.Transparency = 0.5
-        root.CanCollide = false
+        root.Size=Vector3.new(Config.HitboxSize,Config.HitboxSize,Config.HitboxSize)
+        root.Transparency=0.5
+        root.CanCollide=false
     else
-        root.Size = Vector3.new(2,2,1)
-        root.Transparency = 0
-        root.CanCollide = true
+        root.Size=Vector3.new(2,2,1)
+        root.Transparency=0
+        root.CanCollide=true
     end
 end
 
---// MOVEMENT
+-- MOVEMENT
 local function ApplyMovement()
-    local char = LocalPlayer.Character
+    local char=LocalPlayer.Character
     if not char then return end
 
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hum=char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
     hum.WalkSpeed = Config.SpeedEnabled and Config.WalkSpeed or 16
@@ -140,86 +144,97 @@ local function ApplyMovement()
     workspace.Gravity = Config.GravityEnabled and Config.Gravity or 196.2
 end
 
---// CREATE ESP
+-- CREATE ESP
 local function CreateESP(p)
-    if p == LocalPlayer or ESP[p] then return end
+    if p==LocalPlayer or ESP[p] then return end
 
-    local gui = Instance.new("BillboardGui")
-    gui.Size = UDim2.new(4,0,5,0)
-    gui.AlwaysOnTop = true
-    gui.Parent = GUIParent
+    local gui=Instance.new("BillboardGui")
+    gui.Size=UDim2.new(4,0,5,0)
+    gui.AlwaysOnTop=true
+    gui.Parent=GUIParent
 
-    local text = Instance.new("TextLabel",gui)
-    text.Size = UDim2.new(1,0,1,0)
-    text.BackgroundTransparency = 1
-    text.TextScaled = true
+    local text=Instance.new("TextLabel",gui)
+    text.Size=UDim2.new(1,0,1,0)
+    text.BackgroundTransparency=1
+    text.TextScaled=true
 
-    local tracer
+    local tracer=nil
     pcall(function()
-        tracer = Drawing.new("Line")
-        tracer.Thickness = 1.5
+        tracer=Drawing.new("Line")
+        tracer.Thickness=1.5
     end)
 
-    local hl = Instance.new("Highlight")
-    hl.Parent = GUIParent
+    local hl=Instance.new("Highlight")
+    hl.Parent=GUIParent
 
-    ESP[p] = {GUI=gui,Text=text,Tracer=tracer,HL=hl}
+    ESP[p]={GUI=gui,Text=text,Tracer=tracer,HL=hl}
 end
 
---// LOOP
+-- LOOP
 RunService.RenderStepped:Connect(function()
+
+    -- FOV
+    if FOVCircle then
+        FOVCircle.Radius=Config.FOV
+        FOVCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+        FOVCircle.Visible=Config.ShowFOV and Config.Aimbot
+        FOVCircle.Color=Config.Rainbow and Color3.fromHSV((tick()%5)/5,1,1) or Config.Colors.FOV
+    end
 
     GetTarget()
 
+    -- AIMBOT
     if Config.Aimbot and LockedTarget then
-        local vel = LockedTarget.Velocity or Vector3.new()
-        local pred = LockedTarget.Position + (vel * Config.Prediction)
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, pred)
+        local vel=LockedTarget.Velocity or Vector3.new()
+        local pred=LockedTarget.Position+(vel*Config.Prediction)
+        Camera.CFrame=CFrame.lookAt(Camera.CFrame.Position,pred)
     end
 
     ApplyMovement()
 
     for p,v in pairs(ESP) do
         if p.Character then
-            local head = p.Character:FindFirstChild("Head")
+            local char=p.Character
+            local head=char:FindFirstChild("Head")
 
             ApplyHitbox(p)
 
             if Config.ESP and head then
-                local color = Config.TeamColor and p.TeamColor.Color or Config.Colors.ESP
+                local color=Config.TeamColor and p.TeamColor.Color or Config.Colors.ESP
+                if Config.Rainbow then color=Color3.fromHSV((tick()%5)/5,1,1) end
 
                 if Config.TextESP then
-                    v.GUI.Adornee = head
-                    v.GUI.Enabled = true
-                    v.Text.Text = p.Name
-                    v.Text.TextColor3 = color
+                    v.GUI.Adornee=head
+                    v.GUI.Enabled=true
+                    v.Text.Text=p.Name
+                    v.Text.TextColor3=color
                 else
-                    v.GUI.Enabled = false
+                    v.GUI.Enabled=false
                 end
 
                 if v.Tracer and Config.Tracer then
-                    local pos, vis = Camera:WorldToViewportPoint(head.Position)
-                    if vis then
-                        v.Tracer.From = Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
-                        v.Tracer.To = Vector2.new(pos.X,pos.Y)
-                        v.Tracer.Color = color
-                        v.Tracer.Visible = true
+                    local pos,vis=Camera:WorldToViewportPoint(head.Position)
+                    if vis and InFOV(pos) then
+                        v.Tracer.From=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
+                        v.Tracer.To=Vector2.new(pos.X,pos.Y)
+                        v.Tracer.Color=color
+                        v.Tracer.Visible=true
                     else
-                        v.Tracer.Visible = false
+                        v.Tracer.Visible=false
                     end
                 end
 
                 if Config.Highlight then
-                    v.HL.Adornee = p.Character
-                    v.HL.FillColor = color
-                    v.HL.Enabled = true
+                    v.HL.Adornee=char
+                    v.HL.FillColor=color
+                    v.HL.Enabled=true
                 else
-                    v.HL.Enabled = false
+                    v.HL.Enabled=false
                 end
             else
-                v.GUI.Enabled = false
-                if v.Tracer then v.Tracer.Visible = false end
-                v.HL.Enabled = false
+                v.GUI.Enabled=false
+                if v.Tracer then v.Tracer.Visible=false end
+                v.HL.Enabled=false
             end
         end
     end
@@ -235,7 +250,7 @@ local Window = ArrayField:CreateWindow({
 
     KeySettings = {
         Title = "COCO HUB KEY",
-        Subtitle = "ใส่ คีย์ตรงนี้พวกเอ๋อ",
+        Subtitle = "OMG KING SINEX_X",
         Note = "Use correct key",
         FileName = "COCOHUB_KEY",
         SaveKey = true,
@@ -254,19 +269,42 @@ local Window = ArrayField:CreateWindow({
     }
 })
 
-local Combat = Window:CreateTab("Combat")
-local Visual = Window:CreateTab("Visual")
-local Mics = Window:CreateTab("Mics")
 
+local Combat=Window:CreateTab("Combat")
+local Visual=Window:CreateTab("Visual")
+local Mics=Window:CreateTab("Mics")
+
+-- COMBAT
 Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Callback=function(v)Config.Aimbot=v end})
-Combat:CreateToggle({Name="Team Check",CurrentValue=true,Callback=function(v)Config.TeamCheck=v end})
 Combat:CreateToggle({Name="Wall Check",CurrentValue=true,Callback=function(v)Config.WallCheck=v end})
+Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},CurrentOption="Head",Callback=function(v)Config.AimPart=v end})
+Combat:CreateSlider({Name="Prediction",Range={0,0.5},Increment=0.01,CurrentValue=0.12,Callback=function(v)Config.Prediction=v end})
 
+-- VISUAL
 Visual:CreateToggle({Name="ESP",CurrentValue=false,Callback=function(v)Config.ESP=v end})
+Visual:CreateToggle({Name="Text ESP",CurrentValue=true,Callback=function(v)Config.TextESP=v end})
 Visual:CreateToggle({Name="Tracer",CurrentValue=true,Callback=function(v)Config.Tracer=v end})
+Visual:CreateToggle({Name="Highlight",CurrentValue=true,Callback=function(v)Config.Highlight=v end})
+Visual:CreateToggle({Name="Team Color",CurrentValue=false,Callback=function(v)Config.TeamColor=v end})
+Visual:CreateToggle({Name="Rainbow",CurrentValue=false,Callback=function(v)Config.Rainbow=v end})
 
+Visual:CreateSlider({Name="FOV Size",Range={50,800},Increment=10,CurrentValue=250,Callback=function(v)Config.FOV=v end})
+
+Visual:CreateToggle({Name="Hitbox",CurrentValue=false,Callback=function(v)Config.Hitbox=v end})
+Visual:CreateSlider({Name="Hitbox Size",Range={2,500},Increment=1,CurrentValue=10,Callback=function(v)Config.HitboxSize=v end})
+
+Visual:CreateColorPicker({Name="FOV Color",Color=Config.Colors.FOV,Callback=function(v)Config.Colors.FOV=v end})
+Visual:CreateColorPicker({Name="ESP Color",Color=Config.Colors.ESP,Callback=function(v)Config.Colors.ESP=v end})
+
+-- MICS
 Mics:CreateToggle({Name="Speed",CurrentValue=false,Callback=function(v)Config.SpeedEnabled=v end})
-Mics:CreateSlider({Name="WalkSpeed",Range={16,500},CurrentValue=16,Callback=function(v)Config.WalkSpeed=v end})
+Mics:CreateSlider({Name="WalkSpeed",Range={16,500},Increment=1,CurrentValue=16,Callback=function(v)Config.WalkSpeed=v end})
+
+Mics:CreateToggle({Name="Jump Power",CurrentValue=false,Callback=function(v)Config.JumpEnabled=v end})
+Mics:CreateSlider({Name="Jump Height",Range={50,500},Increment=1,CurrentValue=50,Callback=function(v)Config.JumpPower=v end})
+
+Mics:CreateToggle({Name="Gravity",CurrentValue=false,Callback=function(v)Config.GravityEnabled=v end})
+Mics:CreateSlider({Name="Gravity Value",Range={0,1000},Increment=10,CurrentValue=196,Callback=function(v)Config.Gravity=v end})
 
 -- INIT
 for _,p in pairs(Players:GetPlayers()) do CreateESP(p) end
