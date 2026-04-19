@@ -256,13 +256,13 @@ local Window = ArrayField:CreateWindow({
         SaveKey = true,
         GrabKeyFromSite = false,
 
-        Key = {"lnwSINEX_X007"},
+        Key = {"lnwSINEX_X555"},
 
         Actions = {
             [1] = {
                 Text = 'Copy Key',
                 OnPress = function()
-                    setclipboard("lnwSINEX_X007")
+                    setclipboard("กูขายสมองไปซื้อ___")
                 end,
             }
         },
