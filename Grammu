@@ -5,16 +5,17 @@ local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
 --// SAFE GUI
-local GUIParent = (gethui and gethui()) or game.CoreGui
+local success_gui, CoreGui = pcall(function() return game:GetService("CoreGui") end)
+local GUIParent = (gethui and gethui()) or (success_gui and CoreGui) or LocalPlayer:WaitForChild("PlayerGui")
 
---// LOAD UI (แก้ไขลิงก์ที่ตายแล้ว)
-local ArrayField
+--// LOAD UI
+local Rayfield
 local success, err = pcall(function()
-    ArrayField = loadstring(game:HttpGet("https://raw.githubusercontent.com/UI-Interface/ArrayField/main/source.lua"))()
+    Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/siriussoftware/Rayfield/main/source.lua"))()
 end)
 
-if not ArrayField then 
-    warn("ไม่สามารถโหลด UI ได้: " .. tostring(err))
+if not Rayfield then 
+    warn("Failed to load UI. Please check your internet connection or your Executor: " .. tostring(err))
     return 
 end
 
@@ -38,6 +39,7 @@ local Config = {
     Rainbow = false,
 
     Hitbox = false,
+    HitboxPart = "Head", -- Added option to select Hitbox part
     HitboxSize = 10,
 
     WalkSpeed = 16,
@@ -78,7 +80,7 @@ local function IsEnemy(p)
     return p.Team ~= LocalPlayer.Team
 end
 
--- ✅ WALLCHECK
+--// WALLCHECK
 local function IsVisible(part, char)
     if not Config.WallCheck then return true end
 
@@ -93,7 +95,7 @@ local function IsVisible(part, char)
     return result == nil or result.Instance:IsDescendantOf(char)
 end
 
--- TARGET
+--// TARGET
 local function GetTarget()
     local closest, shortest = nil, Config.FOV
 
@@ -117,28 +119,44 @@ local function GetTarget()
     LockedTarget = closest
 end
 
--- HITBOX (แก้ไขให้ทำงานเฉพาะตอนที่เปลี่ยนค่า เพื่อลดอาการแลค)
+--// HITBOX (Updated to support Head)
 local function ApplyHitbox(p)
     if not p.Character then return end
-    local root = p.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+    
+    -- Find Part based on Config (Head or HumanoidRootPart)
+    local targetPart = p.Character:FindFirstChild(Config.HitboxPart)
+    if not targetPart then return end
 
     if Config.Hitbox then
-        if root.Size.X ~= Config.HitboxSize then
-            root.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-            root.Transparency = 0.5
-            root.CanCollide = false
+        if targetPart.Size.X ~= Config.HitboxSize then
+            targetPart.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+            targetPart.Transparency = 0.5
+            targetPart.CanCollide = false
+            
+            -- Prevents the head from causing weird physics/movement when expanded
+            targetPart.Massless = true 
         end
     else
-        if root.Size.X ~= 2 then
-            root.Size = Vector3.new(2, 2, 1)
-            root.Transparency = 0
-            root.CanCollide = true
+        -- Restore original size when Hitbox is turned off
+        if Config.HitboxPart == "Head" then
+            if targetPart.Size.X ~= 1.2 then
+                targetPart.Size = Vector3.new(1.2, 1.2, 1.2) -- Standard Head size
+                targetPart.Transparency = 0
+                targetPart.CanCollide = true
+                targetPart.Massless = false
+            end
+        elseif Config.HitboxPart == "HumanoidRootPart" then
+            if targetPart.Size.X ~= 2 then
+                targetPart.Size = Vector3.new(2, 2, 1) -- Standard RootPart size
+                targetPart.Transparency = 1
+                targetPart.CanCollide = true
+                targetPart.Massless = false
+            end
         end
     end
 end
 
--- MOVEMENT
+--// MOVEMENT
 local function ApplyMovement()
     local char = LocalPlayer.Character
     if not char then return end
@@ -146,20 +164,25 @@ local function ApplyMovement()
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
-    hum.WalkSpeed = Config.SpeedEnabled and Config.WalkSpeed or 16
-    hum.UseJumpPower = true
-    hum.JumpPower = Config.JumpEnabled and Config.JumpPower or 50
-    workspace.Gravity = Config.GravityEnabled and Config.Gravity or 196.2
+    if Config.SpeedEnabled then hum.WalkSpeed = Config.WalkSpeed else hum.WalkSpeed = 16 end
+    if Config.JumpEnabled then
+        hum.UseJumpPower = true
+        hum.JumpPower = Config.JumpPower
+    else
+        hum.UseJumpPower = true
+        hum.JumpPower = 50
+    end
+    if Config.GravityEnabled then workspace.Gravity = Config.Gravity else workspace.Gravity = 196.2 end
 end
 
--- CREATE ESP
+--// CREATE ESP
 local function CreateESP(p)
     if p == LocalPlayer or ESP[p] then return end
 
     local gui = Instance.new("BillboardGui")
     gui.Size = UDim2.new(4, 0, 5, 0)
     gui.AlwaysOnTop = true
-    gui.Parent = GUIParent
+    pcall(function() gui.Parent = GUIParent end)
 
     local text = Instance.new("TextLabel", gui)
     text.Size = UDim2.new(1, 0, 1, 0)
@@ -173,12 +196,12 @@ local function CreateESP(p)
     end)
 
     local hl = Instance.new("Highlight")
-    hl.Parent = GUIParent
+    pcall(function() hl.Parent = GUIParent end)
 
     ESP[p] = {GUI = gui, Text = text, Tracer = tracer, HL = hl}
 end
 
--- REMOVE ESP (ลบข้อมูลเมื่อมีผู้เล่นออก ป้องกันบัค)
+--// REMOVE ESP
 local function RemoveESP(p)
     if ESP[p] then
         if ESP[p].GUI then ESP[p].GUI:Destroy() end
@@ -188,7 +211,7 @@ local function RemoveESP(p)
     end
 end
 
--- LOOP
+--// LOOP
 RunService.RenderStepped:Connect(function()
     -- FOV
     if FOVCircle then
@@ -202,7 +225,7 @@ RunService.RenderStepped:Connect(function()
 
     -- AIMBOT
     if Config.Aimbot and LockedTarget then
-        local vel = LockedTarget.Velocity or Vector3.new()
+        local vel = LockedTarget.AssemblyLinearVelocity or Vector3.new(0,0,0)
         local pred = LockedTarget.Position + (vel * Config.Prediction)
         Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, pred)
     end
@@ -210,13 +233,13 @@ RunService.RenderStepped:Connect(function()
     ApplyMovement()
 
     for p, v in pairs(ESP) do
-        if p.Character then
+        if p and p.Character and p.Character:FindFirstChild("Head") then
             local char = p.Character
-            local head = char:FindFirstChild("Head")
+            local head = char.Head
 
             ApplyHitbox(p)
 
-            if Config.ESP and head then
+            if Config.ESP then
                 local color = Config.TeamColor and p.TeamColor.Color or Config.Colors.ESP
                 if Config.Rainbow then color = Color3.fromHSV((tick() % 5) / 5, 1, 1) end
 
@@ -239,6 +262,8 @@ RunService.RenderStepped:Connect(function()
                     else
                         v.Tracer.Visible = false
                     end
+                else
+                    if v.Tracer then v.Tracer.Visible = false end
                 end
 
                 if Config.Highlight then
@@ -253,65 +278,69 @@ RunService.RenderStepped:Connect(function()
                 if v.Tracer then v.Tracer.Visible = false end
                 v.HL.Enabled = false
             end
+        else
+            v.GUI.Enabled = false
+            if v.Tracer then v.Tracer.Visible = false end
+            v.HL.Enabled = false
         end
     end
 end)
 
 --// UI + KEY SYSTEM
-local Window = ArrayField:CreateWindow({
+local Window = Rayfield:CreateWindow({
     Name = "COCO HUB | By SINEX_X",
     LoadingTitle = "COCO HUB",
     LoadingSubtitle = "lnwSINEX_X",
+    ConfigurationSaving = {
+       Enabled = false,
+    },
     KeySystem = true,
     KeySettings = {
         Title = "COCO HUB KEY",
         Subtitle = "OMG KING SINEX_X",
-        Note = "Use correct key",
+        Note = "The key is: lnwSINEX_X555",
         FileName = "COCOHUB_KEY",
         SaveKey = true,
         GrabKeyFromSite = false,
-        Key = {"lnwSINEX_X555"},
-        Actions = {
-            [1] = {
-                Text = 'Copy Key',
-                OnPress = function()
-                    setclipboard("lnwSINEX_X555")
-                end,
-            }
-        },
+        Key = {"lnwSINEX_X555"}
     }
 })
 
 local Combat = Window:CreateTab("Combat")
 local Visual = Window:CreateTab("Visual")
-local Mics = Window:CreateTab("Mics")
+local Mics = Window:CreateTab("Misc")
 
 -- COMBAT
-Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Callback=function(v)Config.Aimbot=v end})
-Combat:CreateToggle({Name="Wall Check",CurrentValue=true,Callback=function(v)Config.WallCheck=v end})
-Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},CurrentOption="Head",Callback=function(v)Config.AimPart=v end})
-Combat:CreateSlider({Name="Prediction",Range={0,0.5},Increment=0.01,CurrentValue=0.12,Callback=function(v)Config.Prediction=v end})
+Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Flag="Aimbot",Callback=function(v)Config.Aimbot=v end})
+Combat:CreateToggle({Name="Wall Check",CurrentValue=true,Flag="WallCheck",Callback=function(v)Config.WallCheck=v end})
+Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},CurrentOption={"Head"},MultipleOptions=false,Flag="AimPart",Callback=function(v)Config.AimPart=v[1] end})
+Combat:CreateSlider({Name="Prediction",Range={0,0.5},Increment=0.01,CurrentValue=0.12,Flag="Pred",Callback=function(v)Config.Prediction=v end})
 
 -- VISUAL
-Visual:CreateToggle({Name="ESP",CurrentValue=false,Callback=function(v)Config.ESP=v end})
-Visual:CreateToggle({Name="Text ESP",CurrentValue=true,Callback=function(v)Config.TextESP=v end})
-Visual:CreateToggle({Name="Tracer",CurrentValue=true,Callback=function(v)Config.Tracer=v end})
-Visual:CreateToggle({Name="Highlight",CurrentValue=true,Callback=function(v)Config.Highlight=v end})
-Visual:CreateToggle({Name="Team Color",CurrentValue=false,Callback=function(v)Config.TeamColor=v end})
-Visual:CreateToggle({Name="Rainbow",CurrentValue=false,Callback=function(v)Config.Rainbow=v end})
-Visual:CreateSlider({Name="FOV Size",Range={50,800},Increment=10,CurrentValue=250,Callback=function(v)Config.FOV=v end})
-Visual:CreateToggle({Name="Hitbox",CurrentValue=false,Callback=function(v)Config.Hitbox=v end})
-Visual:CreateSlider({Name="Hitbox Size",Range={2,500},Increment=1,CurrentValue=10,Callback=function(v)Config.HitboxSize=v end})
-Visual:CreateColorPicker({Name="FOV Color",Color=Config.Colors.FOV,Callback=function(v)Config.Colors.FOV=v end})
-Visual:CreateColorPicker({Name="ESP Color",Color=Config.Colors.ESP,Callback=function(v)Config.Colors.ESP=v end})
+Visual:CreateToggle({Name="ESP",CurrentValue=false,Flag="ESP",Callback=function(v)Config.ESP=v end})
+Visual:CreateToggle({Name="Text ESP",CurrentValue=true,Flag="TextESP",Callback=function(v)Config.TextESP=v end})
+Visual:CreateToggle({Name="Tracer",CurrentValue=true,Flag="Tracer",Callback=function(v)Config.Tracer=v end})
+Visual:CreateToggle({Name="Highlight",CurrentValue=true,Flag="Highlight",Callback=function(v)Config.Highlight=v end})
+Visual:CreateToggle({Name="Team Color",CurrentValue=false,Flag="TeamCol",Callback=function(v)Config.TeamColor=v end})
+Visual:CreateToggle({Name="Rainbow ESP",CurrentValue=false,Flag="RainB",Callback=function(v)Config.Rainbow=v end})
+Visual:CreateSlider({Name="FOV Size",Range={50,800},Increment=10,CurrentValue=250,Flag="FOVSize",Callback=function(v)Config.FOV=v end})
 
--- MICS
-Mics:CreateToggle({Name="Speed",CurrentValue=false,Callback=function(v)Config.SpeedEnabled=v end})
-Mics:CreateSlider({Name="WalkSpeed",Range={16,500},Increment=1,CurrentValue=16,Callback=function(v)Config.WalkSpeed=v end})
-Mics:CreateToggle({Name="Jump Power",CurrentValue=false,Callback=function(v)Config.JumpEnabled=v end})
-Mics:CreateSlider({Name="Jump Height",Range={50,500},Increment=1,CurrentValue=50,Callback=function(v)Config.JumpPower=v end})
-Mics:CreateToggle({Name="Gravity",CurrentValue=false,Callback=function(v)Config.GravityEnabled=v end})
-Mics:CreateSlider({Name="Gravity Value",Range={0,1000},Increment=10,CurrentValue=196,Callback=function(v)Config.Gravity=v end})
+-- // HITBOX SETTINGS // --
+Visual:CreateToggle({Name="Hitbox",CurrentValue=false,Flag="Hitbox",Callback=function(v)Config.Hitbox=v end})
+-- Added a dropdown to choose between expanding the Head or the Torso
+Visual:CreateDropdown({Name="Hitbox Part",Options={"Head","HumanoidRootPart"},CurrentOption={"Head"},MultipleOptions=false,Flag="HitboxPart",Callback=function(v)Config.HitboxPart=v[1] end})
+Visual:CreateSlider({Name="Hitbox Size",Range={2,500},Increment=1,CurrentValue=10,Flag="HitboxSize",Callback=function(v)Config.HitboxSize=v end})
+
+Visual:CreateColorPicker({Name="FOV Color",Color=Config.Colors.FOV,Flag="FOVCol",Callback=function(v)Config.Colors.FOV=v end})
+Visual:CreateColorPicker({Name="ESP Color",Color=Config.Colors.ESP,Flag="ESPCol",Callback=function(v)Config.Colors.ESP=v end})
+
+-- MISC
+Mics:CreateToggle({Name="Speed",CurrentValue=false,Flag="SpeedE",Callback=function(v)Config.SpeedEnabled=v end})
+Mics:CreateSlider({Name="WalkSpeed",Range={16,500},Increment=1,CurrentValue=16,Flag="WS",Callback=function(v)Config.WalkSpeed=v end})
+Mics:CreateToggle({Name="Jump Power",CurrentValue=false,Flag="JumpE",Callback=function(v)Config.JumpEnabled=v end})
+Mics:CreateSlider({Name="Jump Height",Range={50,500},Increment=1,CurrentValue=50,Flag="JH",Callback=function(v)Config.JumpPower=v end})
+Mics:CreateToggle({Name="Gravity",CurrentValue=false,Flag="GravE",Callback=function(v)Config.GravityEnabled=v end})
+Mics:CreateSlider({Name="Gravity Value",Range={0,1000},Increment=10,CurrentValue=196,Flag="GravV",Callback=function(v)Config.Gravity=v end})
 
 -- INIT
 for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
