@@ -53,14 +53,14 @@ local ESPStorage = {
 }
 
 -- FOV Circle Setup (Safe Mode)
-local FOVDrawing
+local FovDrawing
 pcall(function()
-    FOVDrawing = Drawing.new("Circle")
-    FOVDrawing.Visible = false
-    FOVDrawing.Thickness = 1
-    FOVDrawing.NumSides = 64
-    FOVDrawing.Filled = false
-    FOVDrawing.Transparency = 1
+    FovDrawing = Drawing.new("Circle")
+    FovDrawing.Visible = false
+    FovDrawing.Thickness = 1
+    FovDrawing.NumSides = 60
+    FovDrawing.Filled = false
+    FovDrawing.Transparency = 0
 end)
 
 -- WallCheck Function
