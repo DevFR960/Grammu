@@ -1,349 +1,392 @@
---// SERVICES
+local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
 
---// SAFE GUI
-local success_gui, CoreGui = pcall(function() return game:GetService("CoreGui") end)
-local GUIParent = (gethui and gethui()) or (success_gui and CoreGui) or LocalPlayer:WaitForChild("PlayerGui")
-
---// LOAD UI
-local Rayfield
-local success, err = pcall(function()
-    Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/siriussoftware/Rayfield/main/source.lua"))()
-end)
-
-if not Rayfield then 
-    warn("Failed to load UI. Please check your internet connection or your Executor: " .. tostring(err))
-    return 
+-- ==========================================
+-- 📱 MOBILE DEVICE CHECK
+-- ==========================================
+if not UserInputService.TouchEnabled then
+    LocalPlayer:Kick("❌ SINEX Hub Error: This script supports MOBILE DEVICES ONLY!")
+    return
 end
 
---// CONFIG
-local Config = {
-    Aimbot = false,
-    AimPart = "Head",
-    Prediction = 0.12,
+-- ==========================================
+-- 🔑 MAIN SCRIPT FUNCTION (LOADS AFTER KEY)
+-- ==========================================
+local function LoadMainScript()
+    -- Load Luna UI Library
+    local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/harisiskandar178/Luna-UI-Library/main/source.lua"))()
 
-    FOV = 250,
-    ShowFOV = true,
+    -- Create Window
+    local Window = Luna:CreateWindow({
+        Title = "SINEX Hub",
+        Subtitle = "คนสร้างรักแฟนที่สุดในโลก",
+        Center = true,
+        AutoShow = true,
+    })
 
-    TeamCheck = true,
-    WallCheck = true,
-
-    ESP = false,
-    TextESP = true,
-    Tracer = true,
-    Highlight = true,
-    TeamColor = false,
-    Rainbow = false,
-
-    Hitbox = false,
-    HitboxPart = "Head", -- Added option to select Hitbox part
-    HitboxSize = 10,
-
-    WalkSpeed = 16,
-    JumpPower = 50,
-    Gravity = 196,
-
-    SpeedEnabled = false,
-    JumpEnabled = false,
-    GravityEnabled = false,
-
-    Colors = {
-        FOV = Color3.fromRGB(0, 255, 255),
-        ESP = Color3.fromRGB(255, 0, 0)
+    -- Configuration Settings Table
+    local Settings = {
+       Aimbot = false,
+       TeamCheck = true,
+       WallCheck = true,
+       
+       HeadHitbox = false,
+       HeadSize = 5,
+       BodyHitbox = false,
+       BodySize = 5,
+       
+       ESPBox = false,
+       ESPLine = false,
+       ESPHealth = false,
+       ESPName = false,
+       ESPDistance = false,
+       ESPColor = Color3.fromRGB(255, 0, 0),
+       
+       Fly = false,
+       FlySpeed = 50,
+       Noclip = false,
+       Invisibility = false,
+       
+       FOV = 150,
+       DrawFOV = true,
+       FOVColor = Color3.fromRGB(255, 255, 255)
     }
-}
 
-local ESP = {}
-local LockedTarget
+    local RunService = game:GetService("RunService")
+    local CoreGui = game:GetService("CoreGui")
+    local Camera = workspace.CurrentCamera
 
---// DRAWING
-local FOVCircle = nil
-pcall(function()
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = 2
-    FOVCircle.NumSides = 60
-    FOVCircle.Filled = false
-end)
+    local TracerPool = {}
 
---// FUNCTIONS
-local function InFOV(pos)
-    local c = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    return (Vector2.new(pos.X, pos.Y) - c).Magnitude <= Config.FOV
-end
+    -- FOV GUI System
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "SnyX_FOV_GUI"
+    ScreenGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 
-local function IsEnemy(p)
-    if not Config.TeamCheck then return true end
-    if not p.Team or not LocalPlayer.Team then return true end
-    return p.Team ~= LocalPlayer.Team
-end
+    local FOVFrame = Instance.new("Frame", ScreenGui)
+    FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    FOVFrame.BackgroundTransparency = 1
+    FOVFrame.Visible = Settings.DrawFOV
 
---// WALLCHECK
-local function IsVisible(part, char)
-    if not Config.WallCheck then return true end
+    local FOVStroke = Instance.new("UIStroke", FOVFrame)
+    FOVStroke.Thickness = 1.5
+    FOVStroke.Color = Settings.FOVColor
 
-    local origin = Camera.CFrame.Position
-    local direction = (part.Position - origin)
+    local FOVCorner = Instance.new("UICorner", FOVFrame)
+    FOVCorner.CornerRadius = UDim.new(1, 0)
 
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character, char}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
+    -- Create UI Tabs
+    local CombatTab = Window:CreateTab("Combat")
+    local VisualsTab = Window:CreateTab("Visuals")
+    local MovementTab = Window:CreateTab("Movement")
 
-    local result = workspace:Raycast(origin, direction, params)
-    return result == nil or result.Instance:IsDescendantOf(char)
-end
-
---// TARGET
-local function GetTarget()
-    local closest, shortest = nil, Config.FOV
-
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local part = p.Character:FindFirstChild(Config.AimPart)
-
-            if part and IsEnemy(p) and IsVisible(part, p.Character) then
-                local pos, vis = Camera:WorldToViewportPoint(part.Position)
-                if vis then
-                    local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
-                    if dist < shortest then
-                        shortest = dist
-                        closest = part
-                    end
-                end
-            end
-        end
-    end
-
-    LockedTarget = closest
-end
-
---// HITBOX (Updated to support Head)
-local function ApplyHitbox(p)
-    if not p.Character then return end
-    
-    -- Find Part based on Config (Head or HumanoidRootPart)
-    local targetPart = p.Character:FindFirstChild(Config.HitboxPart)
-    if not targetPart then return end
-
-    if Config.Hitbox then
-        if targetPart.Size.X ~= Config.HitboxSize then
-            targetPart.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-            targetPart.Transparency = 0.5
-            targetPart.CanCollide = false
-            
-            -- Prevents the head from causing weird physics/movement when expanded
-            targetPart.Massless = true 
-        end
-    else
-        -- Restore original size when Hitbox is turned off
-        if Config.HitboxPart == "Head" then
-            if targetPart.Size.X ~= 1.2 then
-                targetPart.Size = Vector3.new(1.2, 1.2, 1.2) -- Standard Head size
-                targetPart.Transparency = 0
-                targetPart.CanCollide = true
-                targetPart.Massless = false
-            end
-        elseif Config.HitboxPart == "HumanoidRootPart" then
-            if targetPart.Size.X ~= 2 then
-                targetPart.Size = Vector3.new(2, 2, 1) -- Standard RootPart size
-                targetPart.Transparency = 1
-                targetPart.CanCollide = true
-                targetPart.Massless = false
-            end
-        end
-    end
-end
-
---// MOVEMENT
-local function ApplyMovement()
-    local char = LocalPlayer.Character
-    if not char then return end
-
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    if Config.SpeedEnabled then hum.WalkSpeed = Config.WalkSpeed else hum.WalkSpeed = 16 end
-    if Config.JumpEnabled then
-        hum.UseJumpPower = true
-        hum.JumpPower = Config.JumpPower
-    else
-        hum.UseJumpPower = true
-        hum.JumpPower = 50
-    end
-    if Config.GravityEnabled then workspace.Gravity = Config.Gravity else workspace.Gravity = 196.2 end
-end
-
---// CREATE ESP
-local function CreateESP(p)
-    if p == LocalPlayer or ESP[p] then return end
-
-    local gui = Instance.new("BillboardGui")
-    gui.Size = UDim2.new(4, 0, 5, 0)
-    gui.AlwaysOnTop = true
-    pcall(function() gui.Parent = GUIParent end)
-
-    local text = Instance.new("TextLabel", gui)
-    text.Size = UDim2.new(1, 0, 1, 0)
-    text.BackgroundTransparency = 1
-    text.TextScaled = true
-
-    local tracer = nil
+    -- COMBAT TAB
+    CombatTab:CreateLabel("🔫 Aimbot & FOV Settings")
+    CombatTab:CreateToggle("Aimbot (Instant Lock)", function(Value) Settings.Aimbot = Value end)
+    CombatTab:CreateToggle("Team Check", function(Value) Settings.TeamCheck = Value end)
+    CombatTab:CreateToggle("Wall Check (Raycast)", function(Value) Settings.WallCheck = Value end)
+    CombatTab:CreateToggle("Show FOV Circle", function(Value) 
+        Settings.DrawFOV = Value
+        FOVFrame.Visible = Value
+    end)
+    CombatTab:CreateSlider("FOV Size", 50, 600, 150, function(Value) Settings.FOV = Value end)
     pcall(function()
-        tracer = Drawing.new("Line")
-        tracer.Thickness = 1.5
+        CombatTab:CreateColorPicker("FOV Color", Color3.fromRGB(255, 255, 255), function(Value)
+            Settings.FOVColor = Value
+            FOVStroke.Color = Value
+        end)
     end)
 
-    local hl = Instance.new("Highlight")
-    pcall(function() hl.Parent = GUIParent end)
+    CombatTab:CreateLabel("🎯 Separate Hitbox Settings")
+    CombatTab:CreateToggle("Expand Head Hitbox", function(Value) Settings.HeadHitbox = Value end)
+    CombatTab:CreateSlider("Head Hitbox Size", 2, 30, 5, function(Value) Settings.HeadSize = Value end)
+    CombatTab:CreateToggle("Expand Body Hitbox", function(Value) Settings.BodyHitbox = Value end)
+    CombatTab:CreateSlider("Body Hitbox Size", 2, 30, 5, function(Value) Settings.BodySize = Value end)
 
-    ESP[p] = {GUI = gui, Text = text, Tracer = tracer, HL = hl}
+    -- VISUALS TAB
+    VisualsTab:CreateLabel("👁️ ESP Visuals")
+    VisualsTab:CreateToggle("ESP Box (Chams)", function(Value) Settings.ESPBox = Value end)
+    VisualsTab:CreateToggle("ESP Line (Tracer)", function(Value) Settings.ESPLine = Value end)
+    VisualsTab:CreateToggle("ESP Health", function(Value) Settings.ESPHealth = Value end)
+    VisualsTab:CreateToggle("ESP Name & Distance", function(Value)
+        Settings.ESPName = Value
+        Settings.ESPDistance = Value
+    end)
+    pcall(function()
+        VisualsTab:CreateColorPicker("ESP Theme Color", Color3.fromRGB(255, 0, 0), function(Value) Settings.ESPColor = Value end)
+    end)
+
+    -- MOVEMENT TAB
+    MovementTab:CreateLabel("🚀 Player Movement")
+    MovementTab:CreateToggle("Fly", function(Value) Settings.Fly = Value end)
+    MovementTab:CreateSlider("Fly Speed", 10, 200, 50, function(Value) Settings.FlySpeed = Value end)
+    MovementTab:CreateToggle("Noclip", function(Value) Settings.Noclip = Value end)
+    MovementTab:CreateToggle("Invisibility (Ghost)", function(Value) Settings.Invisibility = Value end)
+
+    -- CORE LOGIC
+    local function IsVisible(targetPart)
+       if not Settings.WallCheck then return true end
+       if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return false end
+       
+       local origin = Camera.CFrame.Position
+       local direction = (targetPart.Position - origin)
+       local raycastParams = RaycastParams.new()
+       raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+       raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+       raycastParams.IgnoreWater = true
+       
+       local result = workspace:Raycast(origin, direction, raycastParams)
+       if result then return result.Instance:IsDescendantOf(targetPart.Parent) end
+       return true
+    end
+
+    local function GetClosestPlayer()
+       local target = nil
+       local shortestDist = Settings.FOV
+       local centerScreen = Camera.ViewportSize / 2
+       
+       for _, player in ipairs(Players:GetPlayers()) do
+          if player ~= LocalPlayer then
+             local isEnemy = true
+             if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then isEnemy = false end
+             
+             if isEnemy and player.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                local head = player.Character:FindFirstChild("Head")
+                
+                if humanoid and humanoid.Health > 0 and head then
+                   local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+                   if onScreen then
+                      local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+                      local dist = (centerScreen - screenPos).Magnitude
+                      if dist < shortestDist and IsVisible(head) then
+                         shortestDist = dist
+                         target = head
+                      end
+                   end
+                end
+             end
+          end
+       end
+       return target
+    end
+
+    local function UpdateBillboard(player, head, humanoid, hrp)
+       local bb = head:FindFirstChild("SnyX_ESP")
+       if Settings.ESPName or Settings.ESPHealth or Settings.ESPDistance then
+          if not bb then
+             bb = Instance.new("BillboardGui", head)
+             bb.Name = "SnyX_ESP"
+             bb.Size = UDim2.new(0, 100, 0, 50)
+             bb.StudsOffset = Vector3.new(0, 2, 0)
+             bb.AlwaysOnTop = true
+             local label = Instance.new("TextLabel", bb)
+             label.Size = UDim2.new(1, 0, 1, 0)
+             label.BackgroundTransparency = 1
+             label.TextColor3 = Settings.ESPColor
+             label.TextStrokeTransparency = 0
+             label.TextScaled = true
+          end
+
+          local text = ""
+          if Settings.ESPName then text = text .. player.Name .. "\n" end
+          if Settings.ESPHealth then text = text .. "HP: " .. math.floor(humanoid.Health) .. "\n" end
+          if Settings.ESPDistance and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+             local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
+             text = text .. dist .. "m"
+          end
+          bb.TextLabel.Text = text
+          bb.TextLabel.TextColor3 = Settings.ESPColor
+       else
+          if bb then bb:Destroy() end
+       end
+    end
+
+    RunService.RenderStepped:Connect(function()
+       pcall(function()
+          local centerScreen = Camera.ViewportSize / 2
+          if FOVFrame then FOVFrame.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2) end
+
+          if Settings.Aimbot then
+             local targetHead = GetClosestPlayer()
+             if targetHead then Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetHead.Position) end
+          end
+
+          for _, player in ipairs(Players:GetPlayers()) do
+             if player ~= LocalPlayer then
+                local char = player.Character
+                local isEnemy = not (Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team)
+
+                if char then
+                   local rootPart = char:FindFirstChild("HumanoidRootPart")
+                   local head = char:FindFirstChild("Head")
+                   local humanoid = char:FindFirstChildOfClass("Humanoid")
+
+                   if rootPart then
+                      if Settings.BodyHitbox and isEnemy then
+                         rootPart.Size = Vector3.new(Settings.BodySize, Settings.BodySize, Settings.BodySize)
+                         rootPart.Transparency = 0.7
+                         rootPart.CanCollide = false
+                      else
+                         rootPart.Size = Vector3.new(2, 2, 1)
+                         rootPart.Transparency = 1
+                      end
+                   end
+
+                   if head then
+                      if Settings.HeadHitbox and isEnemy then
+                         head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
+                         head.Transparency = 0.7
+                         head.CanCollide = false
+                      else
+                         head.Size = Vector3.new(1.2, 1.2, 1.2)
+                      end
+                   end
+
+                   if char and rootPart and humanoid and humanoid.Health > 0 and isEnemy then
+                      if Settings.ESPBox then
+                         local hl = char:FindFirstChild("SnyX_HL") or Instance.new("Highlight", char)
+                         hl.Name = "SnyX_HL"
+                         hl.FillTransparency = 0.5
+                         hl.FillColor = Settings.ESPColor
+                         hl.OutlineColor = Settings.ESPColor
+                      else
+                         if char:FindFirstChild("SnyX_HL") then char.SnyX_HL:Destroy() end
+                      end
+
+                      if head then UpdateBillboard(player, head, humanoid, rootPart) end
+
+                      if Settings.ESPLine then
+                         local pos, vis = Camera:WorldToViewportPoint(rootPart.Position)
+                         local tracer = TracerPool[player] or Drawing.new("Line")
+                         if vis then
+                            tracer.Visible = true
+                            tracer.From = Vector2.new(centerScreen.X, Camera.ViewportSize.Y)
+                            tracer.To = Vector2.new(pos.X, pos.Y)
+                            tracer.Color = Settings.ESPColor
+                            tracer.Thickness = 1
+                         else
+                            tracer.Visible = false
+                         end
+                         TracerPool[player] = tracer
+                      elseif TracerPool[player] then
+                         TracerPool[player].Visible = false
+                      end
+                   else
+                      if char:FindFirstChild("SnyX_HL") then char.SnyX_HL:Destroy() end
+                      if head and head:FindFirstChild("SnyX_ESP") then head.SnyX_ESP:Destroy() end
+                      if TracerPool[player] then TracerPool[player].Visible = false end
+                   end
+                end
+             end
+          end
+
+          if Settings.Noclip and LocalPlayer.Character then
+             for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+             end
+          end
+
+          if LocalPlayer.Character then
+             for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("Decal") then
+                   if part.Name ~= "HumanoidRootPart" then part.Transparency = Settings.Invisibility and 1 or 0 end
+                end
+             end
+          end
+
+          if Settings.Fly and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+             local hrp = LocalPlayer.Character.HumanoidRootPart
+             local cam = Camera.CFrame
+             local moveDir = Vector3.new()
+             
+             if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.LookVector end
+             if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.LookVector end
+             if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.RightVector end
+             if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.RightVector end
+             
+             hrp.AssemblyLinearVelocity = moveDir * Settings.FlySpeed
+             hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.LookVector)
+          end
+       end)
+    end)
 end
 
---// REMOVE ESP
-local function RemoveESP(p)
-    if ESP[p] then
-        if ESP[p].GUI then ESP[p].GUI:Destroy() end
-        if ESP[p].Tracer then ESP[p].Tracer:Remove() end
-        if ESP[p].HL then ESP[p].HL:Destroy() end
-        ESP[p] = nil
-    end
-end
+-- ==========================================
+-- 🔐 CUSTOM KEY SYSTEM GUI
+-- ==========================================
+local CoreGui = game:GetService("CoreGui")
+local KeyGui = Instance.new("ScreenGui")
+KeyGui.Name = "SINEX_KeySystem"
+KeyGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+KeyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
---// LOOP
-RunService.RenderStepped:Connect(function()
-    -- FOV
-    if FOVCircle then
-        FOVCircle.Radius = Config.FOV
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        FOVCircle.Visible = Config.ShowFOV and Config.Aimbot
-        FOVCircle.Color = Config.Rainbow and Color3.fromHSV((tick() % 5) / 5, 1, 1) or Config.Colors.FOV
-    end
+local MainFrame = Instance.new("Frame", KeyGui)
+MainFrame.Size = UDim2.new(0, 320, 0, 180)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.BorderSizePixel = 0
 
-    GetTarget()
+local UICorner = Instance.new("UICorner", MainFrame)
+UICorner.CornerRadius = UDim.new(0, 12)
 
-    -- AIMBOT
-    if Config.Aimbot and LockedTarget then
-        local vel = LockedTarget.AssemblyLinearVelocity or Vector3.new(0,0,0)
-        local pred = LockedTarget.Position + (vel * Config.Prediction)
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, pred)
-    end
+local UIStroke = Instance.new("UIStroke", MainFrame)
+UIStroke.Color = Color3.fromRGB(60, 60, 60)
+UIStroke.Thickness = 2
 
-    ApplyMovement()
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "SINEX Hub - Key System"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
 
-    for p, v in pairs(ESP) do
-        if p and p.Character and p.Character:FindFirstChild("Head") then
-            local char = p.Character
-            local head = char.Head
+local KeyBox = Instance.new("TextBox", MainFrame)
+KeyBox.Size = UDim2.new(0, 260, 0, 40)
+KeyBox.Position = UDim2.new(0.5, 0, 0.5, -10)
+KeyBox.AnchorPoint = Vector2.new(0.5, 0.5)
+KeyBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyBox.PlaceholderText = "Enter Key Here..."
+KeyBox.Font = Enum.Font.Gotham
+KeyBox.TextSize = 14
+KeyBox.Text = ""
+KeyBox.ClearTextOnFocus = false
 
-            ApplyHitbox(p)
+local KeyBoxCorner = Instance.new("UICorner", KeyBox)
+KeyBoxCorner.CornerRadius = UDim.new(0, 8)
 
-            if Config.ESP then
-                local color = Config.TeamColor and p.TeamColor.Color or Config.Colors.ESP
-                if Config.Rainbow then color = Color3.fromHSV((tick() % 5) / 5, 1, 1) end
+local SubmitButton = Instance.new("TextButton", MainFrame)
+SubmitButton.Size = UDim2.new(0, 260, 0, 40)
+SubmitButton.Position = UDim2.new(0.5, 0, 0.5, 45)
+SubmitButton.AnchorPoint = Vector2.new(0.5, 0.5)
+SubmitButton.BackgroundColor3 = Color3.fromRGB(80, 80, 255)
+SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SubmitButton.Text = "Check Key"
+SubmitButton.Font = Enum.Font.GothamBold
+SubmitButton.TextSize = 16
 
-                if Config.TextESP then
-                    v.GUI.Adornee = head
-                    v.GUI.Enabled = true
-                    v.Text.Text = p.Name
-                    v.Text.TextColor3 = color
-                else
-                    v.GUI.Enabled = false
-                end
+local SubmitCorner = Instance.new("UICorner", SubmitButton)
+SubmitCorner.CornerRadius = UDim.new(0, 8)
 
-                if v.Tracer and Config.Tracer then
-                    local pos, vis = Camera:WorldToViewportPoint(head.Position)
-                    if vis and InFOV(pos) then
-                        v.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                        v.Tracer.To = Vector2.new(pos.X, pos.Y)
-                        v.Tracer.Color = color
-                        v.Tracer.Visible = true
-                    else
-                        v.Tracer.Visible = false
-                    end
-                else
-                    if v.Tracer then v.Tracer.Visible = false end
-                end
-
-                if Config.Highlight then
-                    v.HL.Adornee = char
-                    v.HL.FillColor = color
-                    v.HL.Enabled = true
-                else
-                    v.HL.Enabled = false
-                end
-            else
-                v.GUI.Enabled = false
-                if v.Tracer then v.Tracer.Visible = false end
-                v.HL.Enabled = false
-            end
-        else
-            v.GUI.Enabled = false
-            if v.Tracer then v.Tracer.Visible = false end
-            v.HL.Enabled = false
-        end
+-- Key Verification Logic
+SubmitButton.MouseButton1Click:Connect(function()
+    local inputKey = KeyBox.Text
+    if inputKey == "LnwSINEX_X" then
+        SubmitButton.Text = "Success!"
+        SubmitButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        task.wait(0.5)
+        KeyGui:Destroy()
+        LoadMainScript() -- โหลด Hub หลังคีย์ถูกต้อง
+    else
+        SubmitButton.Text = "Invalid Key!"
+        SubmitButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        task.wait(1)
+        SubmitButton.Text = "Check Key"
+        SubmitButton.BackgroundColor3 = Color3.fromRGB(80, 80, 255)
     end
 end)
-
---// UI + KEY SYSTEM
-local Window = Rayfield:CreateWindow({
-    Name = "COCO HUB | By SINEX_X",
-    LoadingTitle = "COCO HUB",
-    LoadingSubtitle = "lnwSINEX_X",
-    ConfigurationSaving = {
-       Enabled = false,
-    },
-    KeySystem = true,
-    KeySettings = {
-        Title = "COCO HUB KEY",
-        Subtitle = "OMG KING SINEX_X",
-        Note = "The key is: lnwSINEX_X555",
-        FileName = "COCOHUB_KEY",
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {"lnwSINEX_X555"}
-    }
-})
-
-local Combat = Window:CreateTab("Combat")
-local Visual = Window:CreateTab("Visual")
-local Mics = Window:CreateTab("Misc")
-
--- COMBAT
-Combat:CreateToggle({Name="Aimbot",CurrentValue=false,Flag="Aimbot",Callback=function(v)Config.Aimbot=v end})
-Combat:CreateToggle({Name="Wall Check",CurrentValue=true,Flag="WallCheck",Callback=function(v)Config.WallCheck=v end})
-Combat:CreateDropdown({Name="Aim Part",Options={"Head","HumanoidRootPart"},CurrentOption={"Head"},MultipleOptions=false,Flag="AimPart",Callback=function(v)Config.AimPart=v[1] end})
-Combat:CreateSlider({Name="Prediction",Range={0,0.5},Increment=0.01,CurrentValue=0.12,Flag="Pred",Callback=function(v)Config.Prediction=v end})
-
--- VISUAL
-Visual:CreateToggle({Name="ESP",CurrentValue=false,Flag="ESP",Callback=function(v)Config.ESP=v end})
-Visual:CreateToggle({Name="Text ESP",CurrentValue=true,Flag="TextESP",Callback=function(v)Config.TextESP=v end})
-Visual:CreateToggle({Name="Tracer",CurrentValue=true,Flag="Tracer",Callback=function(v)Config.Tracer=v end})
-Visual:CreateToggle({Name="Highlight",CurrentValue=true,Flag="Highlight",Callback=function(v)Config.Highlight=v end})
-Visual:CreateToggle({Name="Team Color",CurrentValue=false,Flag="TeamCol",Callback=function(v)Config.TeamColor=v end})
-Visual:CreateToggle({Name="Rainbow ESP",CurrentValue=false,Flag="RainB",Callback=function(v)Config.Rainbow=v end})
-Visual:CreateSlider({Name="FOV Size",Range={50,800},Increment=10,CurrentValue=250,Flag="FOVSize",Callback=function(v)Config.FOV=v end})
-
--- // HITBOX SETTINGS // --
-Visual:CreateToggle({Name="Hitbox",CurrentValue=false,Flag="Hitbox",Callback=function(v)Config.Hitbox=v end})
--- Added a dropdown to choose between expanding the Head or the Torso
-Visual:CreateDropdown({Name="Hitbox Part",Options={"Head","HumanoidRootPart"},CurrentOption={"Head"},MultipleOptions=false,Flag="HitboxPart",Callback=function(v)Config.HitboxPart=v[1] end})
-Visual:CreateSlider({Name="Hitbox Size",Range={2,500},Increment=1,CurrentValue=10,Flag="HitboxSize",Callback=function(v)Config.HitboxSize=v end})
-
-Visual:CreateColorPicker({Name="FOV Color",Color=Config.Colors.FOV,Flag="FOVCol",Callback=function(v)Config.Colors.FOV=v end})
-Visual:CreateColorPicker({Name="ESP Color",Color=Config.Colors.ESP,Flag="ESPCol",Callback=function(v)Config.Colors.ESP=v end})
-
--- MISC
-Mics:CreateToggle({Name="Speed",CurrentValue=false,Flag="SpeedE",Callback=function(v)Config.SpeedEnabled=v end})
-Mics:CreateSlider({Name="WalkSpeed",Range={16,500},Increment=1,CurrentValue=16,Flag="WS",Callback=function(v)Config.WalkSpeed=v end})
-Mics:CreateToggle({Name="Jump Power",CurrentValue=false,Flag="JumpE",Callback=function(v)Config.JumpEnabled=v end})
-Mics:CreateSlider({Name="Jump Height",Range={50,500},Increment=1,CurrentValue=50,Flag="JH",Callback=function(v)Config.JumpPower=v end})
-Mics:CreateToggle({Name="Gravity",CurrentValue=false,Flag="GravE",Callback=function(v)Config.GravityEnabled=v end})
-Mics:CreateSlider({Name="Gravity Value",Range={0,1000},Increment=10,CurrentValue=196,Flag="GravV",Callback=function(v)Config.Gravity=v end})
-
--- INIT
-for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
-Players.PlayerAdded:Connect(CreateESP)
-Players.PlayerRemoving:Connect(RemoveESP)
-
