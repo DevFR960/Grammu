@@ -58,9 +58,9 @@ pcall(function()
     FovDrawing = Drawing.new("Circle")
     FovDrawing.Visible = false
     FovDrawing.Thickness = 1
-    FovDrawing.NumSides = 60
+    FovDrawing.NumSides = 64
     FovDrawing.Filled = false
-    FovDrawing.Transparency = 0
+    FovDrawing.Transparency = 1
 end)
 
 -- WallCheck Function
