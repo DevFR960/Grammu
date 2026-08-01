@@ -3,19 +3,18 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================
--- 📱 MOBILE DEVICE CHECK
--- ==========================================
-if not UserInputService.TouchEnabled then
-    LocalPlayer:Kick("❌ SINEX Hub Error: This script supports MOBILE DEVICES ONLY!")
-    return
-end
-
--- ==========================================
 -- 🔑 MAIN SCRIPT FUNCTION (LOADS AFTER KEY)
 -- ==========================================
 local function LoadMainScript()
-    -- Load Luna UI Library
-    local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/harisiskandar178/Luna-UI-Library/main/source.lua"))()
+    -- Load Luna UI Library (Updated Working Source)
+    local Success, Luna = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+    end)
+
+    -- Fallback to Rayfield if Luna fails to load
+    if not Success or not Luna then
+        Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/harisiskandar178/Luna-UI-Library/main/source.lua"))()
+    end
 
     -- Create Window
     local Window = Luna:CreateWindow({
@@ -381,7 +380,7 @@ SubmitButton.MouseButton1Click:Connect(function()
         SubmitButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         task.wait(0.5)
         KeyGui:Destroy()
-        LoadMainScript() -- โหลด Hub หลังคีย์ถูกต้อง
+        LoadMainScript() -- โหลด Hub หลังใส่คีย์ถูกต้อง
     else
         SubmitButton.Text = "Invalid Key!"
         SubmitButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
@@ -390,3 +389,4 @@ SubmitButton.MouseButton1Click:Connect(function()
         SubmitButton.BackgroundColor3 = Color3.fromRGB(80, 80, 255)
     end
 end)
+
