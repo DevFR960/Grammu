@@ -14,7 +14,10 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = false }
 })
 
-local Tab = Window:CreateTab("Combat & Visuals", 4483362458)
+-- Create Tabs: Combat, Visuals, Misc
+local CombatTab = Window:CreateTab("Combat", 4483362458)
+local VisualsTab = Window:CreateTab("Visuals", 4483362458)
+local MiscTab = Window:CreateTab("Misc", 4483362458)
 
 -- Settings Table
 getgenv().SINEX_Settings = {
@@ -38,7 +41,8 @@ getgenv().SINEX_Settings = {
     
     Fly = false,
     FlySpeed = 50,
-    NoClip = false
+    NoClip = false,
+    Invisibility = false
 }
 
 -- Storage tables for ESP drawings
@@ -140,7 +144,7 @@ RunService.RenderStepped:Connect(function()
         end)
     end
 
-    -- Aimbot Execution (ทำงานทันทีเมื่อเปิด Toggle ไม่ต้องคลิกขวา)
+    -- Aimbot Execution
     if getgenv().SINEX_Settings.Aimbot then
         local targetPart = GetClosestPlayer()
         if targetPart then
@@ -273,8 +277,8 @@ Players.PlayerRemoving:Connect(function(v)
     RemoveESP(v)
 end)
 
--- UI Components setup for Rayfield
-Tab:CreateToggle({
+-- ==================== COMBAT TAB ====================
+CombatTab:CreateToggle({
     Name = "Enable Aimbot",
     CurrentValue = false,
     Callback = function(Value)
@@ -282,7 +286,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "WallCheck (ไม่ล็อกทะลุกำแพง)",
     CurrentValue = false,
     Callback = function(Value)
@@ -290,7 +294,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateDropdown({
+CombatTab:CreateDropdown({
     Name = "Hitbox Select",
     Options = {"Head", "HumanoidRootPart"},
     CurrentOption = "Head",
@@ -299,7 +303,7 @@ Tab:CreateDropdown({
     end,
 })
 
-Tab:CreateSlider({
+CombatTab:CreateSlider({
     Name = "FOV Size",
     Range = {10, 500},
     Increment = 5,
@@ -309,7 +313,7 @@ Tab:CreateSlider({
     end,
 })
 
-Tab:CreateColorPicker({
+CombatTab:CreateColorPicker({
     Name = "FOV & Aimbot Color",
     Color = Color3.fromRGB(255, 0, 0),
     Callback = function(Value)
@@ -317,7 +321,7 @@ Tab:CreateColorPicker({
     end,
 })
 
-Tab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "Team Check",
     CurrentValue = true,
     Callback = function(Value)
@@ -325,8 +329,8 @@ Tab:CreateToggle({
     end,
 })
 
--- Full ESP Section Toggles
-Tab:CreateToggle({
+-- ==================== VISUALS TAB ====================
+VisualsTab:CreateToggle({
     Name = "Enable ESP Master",
     CurrentValue = false,
     Callback = function(Value)
@@ -334,7 +338,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Highlight (Chams) ESP",
     CurrentValue = false,
     Callback = function(Value)
@@ -342,7 +346,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Box ESP",
     CurrentValue = false,
     Callback = function(Value)
@@ -350,7 +354,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateSlider({
+VisualsTab:CreateSlider({
     Name = "ESP Box Thickness (ความหนากล่อง)",
     Range = {1, 5},
     Increment = 0.5,
@@ -360,7 +364,7 @@ Tab:CreateSlider({
     end,
 })
 
-Tab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Tracer Lines",
     CurrentValue = false,
     Callback = function(Value)
@@ -368,7 +372,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Name ESP",
     CurrentValue = false,
     Callback = function(Value)
@@ -376,7 +380,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Distance ESP",
     CurrentValue = false,
     Callback = function(Value)
@@ -384,7 +388,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Health ESP",
     CurrentValue = false,
     Callback = function(Value)
@@ -392,7 +396,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateColorPicker({
+VisualsTab:CreateColorPicker({
     Name = "ESP Color (ปรับสี ESP)",
     Color = Color3.fromRGB(0, 255, 0),
     Callback = function(Value)
@@ -400,7 +404,8 @@ Tab:CreateColorPicker({
     end,
 })
 
-Tab:CreateToggle({
+-- ==================== MISC TAB ====================
+MiscTab:CreateToggle({
     Name = "Fly Mode",
     CurrentValue = false,
     Callback = function(Value)
@@ -421,7 +426,7 @@ Tab:CreateToggle({
     end,
 })
 
-Tab:CreateSlider({
+MiscTab:CreateSlider({
     Name = "Fly Speed",
     Range = {10, 200},
     Increment = 5,
@@ -431,13 +436,41 @@ Tab:CreateSlider({
     end,
 })
 
-Tab:CreateToggle({
+MiscTab:CreateToggle({
     Name = "NoClip",
     CurrentValue = false,
     Callback = function(Value)
         getgenv().SINEX_Settings.NoClip = Value
     end,
 })
+
+MiscTab:CreateToggle({
+    Name = "Invisibility (ล่องหน)",
+    CurrentValue = false,
+    Callback = function(Value)
+        getgenv().SINEX_Settings.Invisibility = Value
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("Decal") then
+                    part.Transparency = Value and 1 or 0
+                end
+            end
+        end
+    end,
+})
+
+-- Handle character respawn for Invisibility
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if getgenv().SINEX_Settings.Invisibility then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("Decal") then
+                part.Transparency = 1
+            end
+        end
+    end
+end)
 
 RunService.Stepped:Connect(function()
     if getgenv().SINEX_Settings.NoClip and LocalPlayer.Character then
