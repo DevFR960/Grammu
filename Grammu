@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -52,16 +53,32 @@ local ESPStorage = {
     Names = {}
 }
 
--- FOV Circle Setup (Safe Mode)
-local FovDrawing
+-- FOV Circle Setup (Using ScreenGui for Delta & Xeno Mobile Support)
+local FOVGui = Instance.new("ScreenGui")
+FOVGui.Name = "SinexFOV_GUI"
+FOVGui.ResetOnSpawn = false
 pcall(function()
-    FovDrawing = Drawing.new("Circle")
-    FovDrawing.Visible = false
-    FovDrawing.Thickness = 1
-    FovDrawing.NumSides = 64
-    FovDrawing.Filled = false
-    FovDrawing.Transparency = 1
+    FOVGui.Parent = CoreGui
 end)
+if not FOVGui.Parent then
+    FOVGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local FOVFrame = Instance.new("Frame")
+FOVFrame.Name = "FOVCircle"
+FOVFrame.BackgroundTransparency = 1
+FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVFrame.Visible = false
+FOVFrame.Parent = FOVGui
+
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Thickness = 1.5
+FOVStroke.Color = Color3.fromRGB(255, 0, 0)
+FOVStroke.Parent = FOVFrame
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(1, 0)
+UICorner.Parent = FOVFrame
 
 -- WallCheck Function
 local function IsVisible(targetPart)
@@ -82,7 +99,7 @@ local function IsVisible(targetPart)
     return result == nil
 end
 
--- Aimbot Target Calculation with WallCheck
+-- Aimbot Target Calculation with WallCheck & Accuracy
 local function GetClosestPlayer()
     local target = nil
     local shortestDist = getgenv().SINEX_Settings.AimFov
@@ -93,11 +110,14 @@ local function GetClosestPlayer()
     if not mousePos then mousePos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2) end
 
     for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(getgenv().SINEX_Settings.AimPart) then
-            if not getgenv().SINEX_Settings.TeamCheck or v.Team ~= LocalPlayer.Team then
-                local rootPart = v.Character:FindFirstChild("HumanoidRootPart")
-                local targetPart = v.Character[getgenv().SINEX_Settings.AimPart]
-                if rootPart and targetPart then
+        if v ~= LocalPlayer and v.Character then
+            local partName = getgenv().SINEX_Settings.AimPart
+            local targetPart = v.Character:FindFirstChild(partName)
+            local rootPart = v.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = v.Character:FindFirstChild("Humanoid")
+
+            if targetPart and rootPart and humanoid and humanoid.Health > 0 then
+                if not getgenv().SINEX_Settings.TeamCheck or v.Team ~= LocalPlayer.Team then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
                     if onScreen and IsVisible(targetPart) then
                         local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
@@ -134,14 +154,19 @@ end
 
 -- Render Loop for Aimbot & ESP
 RunService.RenderStepped:Connect(function()
-    -- FOV Update
-    if FOVDrawing then
+    -- FOV Update (GUI Version)
+    local fovVisible = getgenv().SINEX_Settings.Aimbot
+    FOVFrame.Visible = fovVisible
+    if fovVisible then
+        local fovSize = getgenv().SINEX_Settings.AimFov * 2
+        FOVFrame.Size = UDim2.new(0, fovSize, 0, fovSize)
+        FOVStroke.Color = getgenv().SINEX_Settings.AimColor
+        local mousePos
         pcall(function()
-            FOVDrawing.Radius = getgenv().SINEX_Settings.AimFov
-            FOVDrawing.Color = getgenv().SINEX_Settings.AimColor
-            FOVDrawing.Visible = getgenv().SINEX_Settings.Aimbot
-            FOVDrawing.Position = UserInputService:GetMouseLocation()
+            mousePos = UserInputService:GetMouseLocation()
         end)
+        if not mousePos then mousePos = Camera.ViewportSize / 2 end
+        FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
     end
 
     -- Aimbot Execution
@@ -295,7 +320,7 @@ CombatTab:CreateToggle({
 })
 
 CombatTab:CreateDropdown({
-    Name = "Hitbox Select",
+    Name = "Hitbox Select (เลือกหัว/ตัว)",
     Options = {"Head", "HumanoidRootPart"},
     CurrentOption = "Head",
     Callback = function(Option)
@@ -494,4 +519,3 @@ RunService.Stepped:Connect(function()
         end
     end
 end)
-
