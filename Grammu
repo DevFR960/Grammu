@@ -2,20 +2,18 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- // Key System Verification
-local CorrectKey = "LnwSINEX"
 local KeyAuthenticated = true
 
 -- // Configuration & Settings Table
 getgenv().ScriptSettings = {
-    SilentAimEnabled = false,
-    SilentAimFOV = 100,
-    SilentAimFOVColor = Color3.fromRGB(255, 255, 255),
+    AimbotEnabled = false,
+    AimbotFOV = 100,
+    AimbotFOVColor = Color3.fromRGB(255, 255, 255),
     HeadHitboxSize = 2,
     BodyHitboxSize = 2,
     ESPEnabled = false,
@@ -36,10 +34,8 @@ local Library = { Flags = {} }
 
 function Library:CreateWindow(WindowTitle)
     local Window = {}
-    
     function Window:CreateTab(TabName)
         local Tab = {}
-        
         function Tab:CreateToggle(Data)
             Library.Flags[Data.Flag or Data.Name] = {
                 CurrentValue = Data.CurrentValue or false,
@@ -48,9 +44,7 @@ function Library:CreateWindow(WindowTitle)
                     pcall(function() Data.Callback(val) end)
                 end
             }
-            if Data.CurrentValue then
-                pcall(function() Data.Callback(true) end)
-            end
+            if Data.CurrentValue then pcall(function() Data.Callback(true) end) end
         end
 
         function Tab:CreateSlider(Data)
@@ -74,10 +68,7 @@ function Library:CreateWindow(WindowTitle)
             }
         end
 
-        function Tab:CreateLabel(Text)
-            -- Label element handler
-        end
-
+        function Tab:CreateLabel(Text) end
         return Tab
     end
     return Window
@@ -87,28 +78,32 @@ end
 local Window = Library:CreateWindow("COCO HUB | ADVANCED V3")
 local MainTab = Window:CreateTab("Combat & Visuals")
 
+MainTab:CreateLabel("--- Combat & Aimbot System ---")
+
 MainTab:CreateToggle({
-    Name = "Silent Aim",
+    Name = "Aimbot",
     CurrentValue = false,
-    Flag = "SilentAimToggle",
-    Callback = function(Value) ScriptSettings.SilentAimEnabled = Value end
+    Flag = "AimbotToggle",
+    Callback = function(Value) ScriptSettings.AimbotEnabled = Value end
 })
 
 MainTab:CreateSlider({
-    Name = "Silent Aim FOV Size",
+    Name = "Aimbot FOV Size",
     Range = {20, 500},
     Increment = 5,
     CurrentValue = 100,
-    Flag = "SilentAimFOVVal",
-    Callback = function(Value) ScriptSettings.SilentAimFOV = Value end
+    Flag = "AimbotFOVVal",
+    Callback = function(Value) ScriptSettings.AimbotFOV = Value end
 })
 
 MainTab:CreateColorPicker({
     Name = "FOV Circle Color",
     Color = Color3.fromRGB(255, 255, 255),
     Flag = "FOVColorPicker",
-    Callback = function(Value) ScriptSettings.SilentAimFOVColor = Value end
+    Callback = function(Value) ScriptSettings.AimbotFOVColor = Value end
 })
+
+MainTab:CreateLabel("--- Hitbox System ---")
 
 MainTab:CreateSlider({
     Name = "Head Hitbox Size",
@@ -127,6 +122,8 @@ MainTab:CreateSlider({
     Flag = "BodyHitbox",
     Callback = function(Value) ScriptSettings.BodyHitboxSize = Value end
 })
+
+MainTab:CreateLabel("--- Visuals / ESP System ---")
 
 MainTab:CreateToggle({
     Name = "ESP Box / Highlight",
@@ -167,6 +164,8 @@ MainTab:CreateToggle({
     end
 })
 
+MainTab:CreateLabel("--- Movement & Misc System ---")
+
 MainTab:CreateToggle({
     Name = "Fly Mode",
     CurrentValue = false,
@@ -206,7 +205,7 @@ MainTab:CreateToggle({
     Callback = function(Value) ScriptSettings.Noclip = Value end
 })
 
--- // Drawing & Rendering Backend Logic
+-- // Aimbot & Rendering Backend Logic
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
 FOVCircle.NumSides = 64
@@ -226,7 +225,7 @@ local function GetClosestTarget()
                 if onScreen then
                     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
                     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if dist <= ScriptSettings.SilentAimFOV and dist < shortestDist then
+                    if dist <= ScriptSettings.AimbotFOV and dist < shortestDist then
                         shortestDist = dist
                         target = hrp
                     end
@@ -237,24 +236,20 @@ local function GetClosestTarget()
     return target
 end
 
-local oldIndex
-oldIndex = hookmetamethod(game, "__index", function(self, k)
-    if KeyAuthenticated and ScriptSettings.SilentAimEnabled and not checkcaller() and self == Mouse and k == "Hit" then
-        local target = GetClosestTarget()
-        if target then
-            return target.CFrame
-        end
-    end
-    return oldIndex(self, k)
-end)
-
 RunService.RenderStepped:Connect(function()
     if not KeyAuthenticated then return end
 
-    FOVCircle.Visible = ScriptSettings.SilentAimEnabled
-    FOVCircle.Radius = ScriptSettings.SilentAimFOV
-    FOVCircle.Color = ScriptSettings.SilentAimFOVColor
+    FOVCircle.Visible = ScriptSettings.AimbotEnabled
+    FOVCircle.Radius = ScriptSettings.AimbotFOV
+    FOVCircle.Color = ScriptSettings.AimbotFOVColor
     FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + 36)
+
+    if ScriptSettings.AimbotEnabled then
+        local target = GetClosestTarget()
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    end
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
