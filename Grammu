@@ -117,7 +117,7 @@ CombatTab:CreateToggle({
    end,
 })
 
-CombatTab:CreateSection("⭕ FOV Settings")
+CombatTab:CreateSection("FOV Settings")
 
 CombatTab:CreateToggle({
    Name = "Show FOV Circle",
