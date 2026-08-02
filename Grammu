@@ -9,43 +9,47 @@ if not Success or not Rayfield then
 end
 
 local Window = Rayfield:CreateWindow({
-   Name = "SINEX HUB",
+   Name = "SINEX HUB (Cross-Platform)",
    LoadingTitle = "Loading SINEX HUB",
    LoadingSubtitle = "คนทำรักแฟนที่สุดในโลก",
-   ConfigurationSaving = {
-      Enabled = false,
-   },
-   KeySystem = false,
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = true,
+   KeySettings = {
+      Title = "SINEX HUB - Key System",
+      Subtitle = "กรุณาใส่คีย์เพื่อเข้าสู่ระบบ",
+      Note = "SINEXรักแฟนค้าบ",
+      FileName = "SinexKeySystem",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"SINEX_X"}
+   }
 })
 
--- Configuration Settings Table
 local Settings = {
-   -- Aimbot & Silent Aim
    Aimbot = false,
    SilentAim = false,
    TeamCheck = true,
    WallCheck = true,
    
-   -- FOV
    FOV = 150,
    DrawFOV = true,
    FOVColor = Color3.fromRGB(255, 255, 255),
    
-   -- Hitbox แยกส่วน
    HeadHitbox = false,
    HeadSize = 5,
    BodyHitbox = false,
    BodySize = 5,
    
-   -- ESP
    ESPBox = false,
    ESPLine = false,
    ESPHealth = false,
    ESPName = false,
    ESPDistance = false,
-   ESPColor = Color3.fromRGB(255, 0, 0),
    
-   -- Movement
+   BoxColor = Color3.fromRGB(255, 0, 0),
+   LineColor = Color3.fromRGB(0, 255, 0),
+   TextColor = Color3.fromRGB(255, 255, 255),
+   
    Fly = false,
    FlySpeed = 50,
    Noclip = false,
@@ -57,243 +61,212 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-
--- Storage for ESP Objects
 local TracerPool = {}
 
--- Create Visual FOV Circle safely using Drawing API
-local FOVCircle
+---------------------------------------------------------------------------
+-- UNIVERSAL FOV SYSTEM 
+---------------------------------------------------------------------------
+local FOVGui = Instance.new("ScreenGui")
+FOVGui.Name = "SinexUniversalFOV"
+FOVGui.IgnoreGuiInset = true
+FOVGui.ResetOnSpawn = false
 pcall(function()
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Visible = false
-    FOVCircle.Thickness = 1.5
-    FOVCircle.NumSides = 64
-    FOVCircle.Filled = false
-    FOVCircle.Transparency = 0.7
-    FOVCircle.Radius = Settings.FOV
-    FOVCircle.Color = Settings.FOVColor
+    FOVGui.Parent = gethui()
 end)
+if not FOVGui.Parent then
+    pcall(function() FOVGui.Parent = game:GetService("CoreGui") end)
+end
+if not FOVGui.Parent then
+    FOVGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
 
--- Create UI Tabs
+local FOVFrame = Instance.new("Frame", FOVGui)
+FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+FOVFrame.BackgroundTransparency = 1
+FOVFrame.Visible = false
+
+local FOVStroke = Instance.new("UIStroke", FOVFrame)
+FOVStroke.Thickness = 1.5
+
+local FOVCorner = Instance.new("UICorner", FOVFrame)
+FOVCorner.CornerRadius = UDim.new(1, 0)
+
+---------------------------------------------------------------------------
+-- UI TABS SETUP
+---------------------------------------------------------------------------
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local VisualsTab = Window:CreateTab("Visuals (ESP)", 4483362458)
 local MovementTab = Window:CreateTab("Movement", 4483362458)
 
----------------------------------------------------------------------------
--- COMBAT TAB
----------------------------------------------------------------------------
-
 CombatTab:CreateSection("Aim Settings")
-
 CombatTab:CreateToggle({
-   Name = "Aimbot (Camera Lock)",
+   Name = "Aimbot",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.Aimbot = Value
-   end,
+   Callback = function(Value) Settings.Aimbot = Value end,
 })
-
 CombatTab:CreateToggle({
-   Name = "Silent Aim (Raycast Magic Bullet)",
+   Name = "Silent Aim",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.SilentAim = Value
-   end,
+   Callback = function(Value) Settings.SilentAim = Value end,
 })
-
 CombatTab:CreateToggle({
    Name = "Team Check",
    CurrentValue = true,
-   Callback = function(Value)
-      Settings.TeamCheck = Value
-   end,
+   Callback = function(Value) Settings.TeamCheck = Value end,
 })
-
 CombatTab:CreateToggle({
-   Name = "Wall Check (Raycast)",
+   Name = "Wall Check",
    CurrentValue = true,
-   Callback = function(Value)
-      Settings.WallCheck = Value
-   end,
+   Callback = function(Value) Settings.WallCheck = Value end,
 })
 
 CombatTab:CreateSection("FOV Settings")
-
 CombatTab:CreateToggle({
    Name = "Show FOV Circle",
    CurrentValue = true,
-   Callback = function(Value)
-      Settings.DrawFOV = Value
-      if FOVCircle then FOVCircle.Visible = Value end
-   end,
+   Callback = function(Value) Settings.DrawFOV = Value end,
 })
-
 CombatTab:CreateSlider({
    Name = "FOV Size",
    Range = {50, 600},
    Increment = 5,
    CurrentValue = 150,
-   Callback = function(Value)
-      Settings.FOV = Value
-      if FOVCircle then FOVCircle.Radius = Value end
-   end,
+   Callback = function(Value) Settings.FOV = Value end,
 })
-
 CombatTab:CreateColorPicker({
    Name = "FOV Circle Color",
    Color = Color3.fromRGB(255, 255, 255),
-   Callback = function(Value)
-      Settings.FOVColor = Value
-      if FOVCircle then FOVCircle.Color = Value end
-   end,
+   Callback = function(Value) Settings.FOVColor = Value end,
 })
 
-CombatTab:CreateSection(" Hitbox Settings (Separate)")
-
+CombatTab:CreateSection("Hitbox Settings")
 CombatTab:CreateToggle({
    Name = "Expand Head Hitbox",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.HeadHitbox = Value
-   end,
+   Callback = function(Value) Settings.HeadHitbox = Value end,
 })
-
 CombatTab:CreateSlider({
    Name = "Head Hitbox Size",
    Range = {2, 30},
    Increment = 1,
    CurrentValue = 5,
-   Callback = function(Value)
-      Settings.HeadSize = Value
-   end,
+   Callback = function(Value) Settings.HeadSize = Value end,
 })
-
 CombatTab:CreateToggle({
    Name = "Expand Body Hitbox",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.BodyHitbox = Value
-   end,
+   Callback = function(Value) Settings.BodyHitbox = Value end,
 })
-
 CombatTab:CreateSlider({
    Name = "Body Hitbox Size",
    Range = {2, 30},
    Increment = 1,
    CurrentValue = 5,
-   Callback = function(Value)
-      Settings.BodySize = Value
-   end,
+   Callback = function(Value) Settings.BodySize = Value end,
 })
-
----------------------------------------------------------------------------
--- VISUALS TAB
----------------------------------------------------------------------------
 
 VisualsTab:CreateSection("ESP Visuals")
-
 VisualsTab:CreateToggle({
-   Name = "ESP Box (Chams)",
+   Name = "ESP Chams",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.ESPBox = Value
-   end,
+   Callback = function(Value) Settings.ESPBox = Value end,
 })
-
+VisualsTab:CreateColorPicker({
+   Name = "ESP Chams Color",
+   Color = Color3.fromRGB(255, 0, 0),
+   Callback = function(Value) Settings.BoxColor = Value end,
+})
 VisualsTab:CreateToggle({
-   Name = "ESP Line (Tracer)",
+   Name = "ESP Tracer",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.ESPLine = Value
-   end,
+   Callback = function(Value) Settings.ESPLine = Value end,
 })
-
+VisualsTab:CreateColorPicker({
+   Name = "ESP Tracer Color",
+   Color = Color3.fromRGB(0, 255, 0),
+   Callback = function(Value) Settings.LineColor = Value end,
+})
 VisualsTab:CreateToggle({
    Name = "ESP Health",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.ESPHealth = Value
-   end,
+   Callback = function(Value) Settings.ESPHealth = Value end,
 })
-
 VisualsTab:CreateToggle({
    Name = "ESP Name & Distance",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.ESPName = Value
-      Settings.ESPDistance = Value
-   end,
+   Callback = function(Value) Settings.ESPName = Value; Settings.ESPDistance = Value end,
 })
-
 VisualsTab:CreateColorPicker({
-   Name = "ESP Theme Color",
-   Color = Color3.fromRGB(255, 0, 0),
-   Callback = function(Value)
-      Settings.ESPColor = Value
-   end,
+   Name = "ESP Text Color",
+   Color = Color3.fromRGB(255, 255, 255),
+   Callback = function(Value) Settings.TextColor = Value end,
 })
-
----------------------------------------------------------------------------
--- MOVEMENT TAB
----------------------------------------------------------------------------
 
 MovementTab:CreateSection("Player Movement")
-
 MovementTab:CreateToggle({
    Name = "Fly",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.Fly = Value
-   end,
+   Callback = function(Value) Settings.Fly = Value end,
 })
-
 MovementTab:CreateSlider({
    Name = "Fly Speed",
    Range = {10, 200},
    Increment = 5,
    CurrentValue = 50,
-   Callback = function(Value)
-      Settings.FlySpeed = Value
-   end,
+   Callback = function(Value) Settings.FlySpeed = Value end,
 })
-
 MovementTab:CreateToggle({
-   Name = "Noclip (Walk through walls)",
+   Name = "Noclip",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.Noclip = Value
-   end,
+   Callback = function(Value) Settings.Noclip = Value end,
 })
-
 MovementTab:CreateToggle({
-   Name = "Invisibility (Ghost Mode)",
+   Name = "Invisibility",
    CurrentValue = false,
-   Callback = function(Value)
-      Settings.Invisibility = Value
-   end,
+   Callback = function(Value) Settings.Invisibility = Value end,
 })
 
 ---------------------------------------------------------------------------
--- CORE LOGIC & FUNCTIONS
+-- CORE LOGIC
 ---------------------------------------------------------------------------
+local function IsEnemy(player)
+   if player == LocalPlayer then return false end
+   if not Settings.TeamCheck then return true end
+
+   if LocalPlayer.Team and player.Team then
+      if LocalPlayer.Team == player.Team then return false end
+   end
+   if LocalPlayer.TeamColor and player.TeamColor then
+      if LocalPlayer.TeamColor == player.TeamColor then return false end
+   end
+   return true
+end
 
 local function IsVisible(targetPart)
    if not Settings.WallCheck then return true end
-   if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return false end
+   if not LocalPlayer.Character or not targetPart then return false end
    
+   local character = targetPart.Parent
    local origin = Camera.CFrame.Position
-   local direction = (targetPart.Position - origin)
+   local direction = targetPart.Position - origin
    
-   local raycastParams = RaycastParams.new()
-   raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-   raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-   raycastParams.IgnoreWater = true
+   local ignoreList = {LocalPlayer.Character, character, Camera}
+   local params = RaycastParams.new()
+   params.FilterType = Enum.RaycastFilterType.Exclude
+   params.IgnoreWater = true
    
-   local result = workspace:Raycast(origin, direction, raycastParams)
-   if result then
-       return result.Instance:IsDescendantOf(targetPart.Parent)
+   for i = 1, 3 do
+      params.FilterDescendantsInstances = ignoreList
+      local result = workspace:Raycast(origin, direction, params)
+      if not result then return true end
+      if result.Instance.Transparency >= 0.5 or not result.Instance.CanCollide or result.Instance.Name == "HumanoidRootPart" then
+         table.insert(ignoreList, result.Instance)
+      else
+         return false 
+      end
    end
-   return true
+   return false
 end
 
 local function GetClosestPlayer()
@@ -302,27 +275,20 @@ local function GetClosestPlayer()
    local centerScreen = Camera.ViewportSize / 2
    
    for _, player in ipairs(Players:GetPlayers()) do
-      if player ~= LocalPlayer then
-         local isEnemy = true
-         if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-            isEnemy = false
-         end
+      if IsEnemy(player) and player.Character then
+         local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+         local head = player.Character:FindFirstChild("Head")
          
-         if isEnemy and player.Character then
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local head = player.Character:FindFirstChild("Head")
+         if humanoid and humanoid.Health > 0 and head then
+            local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
             
-            if humanoid and humanoid.Health > 0 and head then
-               local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+            if onScreen then
+               local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+               local dist = (centerScreen - screenPos).Magnitude
                
-               if onScreen then
-                  local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
-                  local dist = (centerScreen - screenPos).Magnitude
-                  
-                  if dist < shortestDist and IsVisible(head) then
-                     shortestDist = dist
-                     target = head
-                  end
+               if dist < shortestDist and IsVisible(head) then
+                  shortestDist = dist
+                  target = head
                end
             end
          end
@@ -331,9 +297,6 @@ local function GetClosestPlayer()
    return target
 end
 
--- ==========================================
--- SILENT AIM (RAYCAST HOOKING)
--- ==========================================
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local args = {...}
@@ -342,15 +305,12 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     if Settings.SilentAim and not checkcaller() then
         local targetHead = GetClosestPlayer()
         if targetHead then
-            -- ถ้าเกมใช้ workspace:Raycast()
             if method == "Raycast" then
                 local origin = args[1]
                 local oldDirection = args[2]
                 local newDirection = (targetHead.Position - origin).Unit * oldDirection.Magnitude
                 args[2] = newDirection
                 return oldNamecall(self, unpack(args))
-                
-            -- ถ้าเกมใช้ Ray.new() แบบเก่า
             elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
                 local oldRay = args[1]
                 local newRay = Ray.new(oldRay.Origin, (targetHead.Position - oldRay.Origin).Unit * oldRay.Direction.Magnitude)
@@ -359,10 +319,8 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
             end
         end
     end
-    
     return oldNamecall(self, ...)
 end)
--- ==========================================
 
 local function UpdateBillboard(player, head, humanoid, hrp)
    local bb = head:FindFirstChild("SnyX_ESP")
@@ -370,25 +328,51 @@ local function UpdateBillboard(player, head, humanoid, hrp)
       if not bb then
          bb = Instance.new("BillboardGui", head)
          bb.Name = "SnyX_ESP"
-         bb.Size = UDim2.new(0, 100, 0, 50)
-         bb.StudsOffset = Vector3.new(0, 2, 0)
+         bb.Size = UDim2.new(0, 120, 0, 45)
+         bb.StudsOffset = Vector3.new(0, 3, 0)
          bb.AlwaysOnTop = true
+
          local label = Instance.new("TextLabel", bb)
-         label.Size = UDim2.new(1, 0, 1, 0)
+         label.Name = "TextInfo"
+         label.Size = UDim2.new(1, 0, 0.6, 0)
          label.BackgroundTransparency = 1
          label.TextStrokeTransparency = 0
          label.TextScaled = true
+         
+         local hpBg = Instance.new("Frame", bb)
+         hpBg.Name = "HP_BG"
+         hpBg.Size = UDim2.new(0.8, 0, 0.15, 0)
+         hpBg.Position = UDim2.new(0.1, 0, 0.7, 0)
+         hpBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+         hpBg.BorderSizePixel = 1
+         hpBg.BorderColor3 = Color3.fromRGB(0, 0, 0)
+         
+         local hpFill = Instance.new("Frame", hpBg)
+         hpFill.Name = "HP_Fill"
+         hpFill.Size = UDim2.new(1, 0, 1, 0)
+         hpFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+         hpFill.BorderSizePixel = 0
       end
 
       local text = ""
       if Settings.ESPName then text = text .. player.Name .. "\n" end
-      if Settings.ESPHealth then text = text .. "HP: " .. math.floor(humanoid.Health) .. "\n" end
       if Settings.ESPDistance and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
          local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
          text = text .. dist .. "m"
       end
-      bb.TextLabel.Text = text
-      bb.TextLabel.TextColor3 = Settings.ESPColor -- อัปเดตสีตาม ColorPicker
+      bb.TextInfo.Text = text
+      bb.TextInfo.TextColor3 = Settings.TextColor
+      bb.TextInfo.Visible = (Settings.ESPName or Settings.ESPDistance)
+
+      if Settings.ESPHealth then
+         bb.HP_BG.Visible = true
+         local maxHealth = humanoid.MaxHealth > 0 and humanoid.MaxHealth or 100
+         local healthPct = math.clamp(humanoid.Health / maxHealth, 0, 1)
+         bb.HP_BG.HP_Fill.Size = UDim2.new(healthPct, 0, 1, 0)
+         bb.HP_BG.HP_Fill.BackgroundColor3 = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPct)
+      else
+         bb.HP_BG.Visible = false
+      end
    else
       if bb then bb:Destroy() end
    end
@@ -398,11 +382,12 @@ RunService.RenderStepped:Connect(function()
    pcall(function()
       local centerScreen = Camera.ViewportSize / 2
 
-      if FOVCircle then
-         FOVCircle.Visible = Settings.DrawFOV
-         FOVCircle.Position = centerScreen
-         FOVCircle.Radius = Settings.FOV
-         FOVCircle.Color = Settings.FOVColor -- อัปเดตสีตาม ColorPicker
+      if FOVFrame then
+         FOVFrame.Visible = Settings.DrawFOV
+         if Settings.DrawFOV then
+            FOVFrame.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
+            FOVStroke.Color = Settings.FOVColor
+         end
       end
 
       if Settings.Aimbot then
@@ -415,7 +400,7 @@ RunService.RenderStepped:Connect(function()
       for _, player in ipairs(Players:GetPlayers()) do
          if player ~= LocalPlayer then
             local char = player.Character
-            local isEnemy = not (Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team)
+            local isEnemy = IsEnemy(player)
 
             if char then
                local rootPart = char:FindFirstChild("HumanoidRootPart")
@@ -448,8 +433,8 @@ RunService.RenderStepped:Connect(function()
                      local hl = char:FindFirstChild("SnyX_HL") or Instance.new("Highlight", char)
                      hl.Name = "SnyX_HL"
                      hl.FillTransparency = 0.5
-                     hl.FillColor = Settings.ESPColor -- อัปเดตสีตาม ColorPicker
-                     hl.OutlineColor = Settings.ESPColor -- อัปเดตสีตาม ColorPicker
+                     hl.FillColor = Settings.BoxColor
+                     hl.OutlineColor = Settings.BoxColor
                   else
                      if char:FindFirstChild("SnyX_HL") then char.SnyX_HL:Destroy() end
                   end
@@ -465,7 +450,7 @@ RunService.RenderStepped:Connect(function()
                         tracer.Visible = true
                         tracer.From = Vector2.new(centerScreen.X, Camera.ViewportSize.Y)
                         tracer.To = Vector2.new(pos.X, pos.Y)
-                        tracer.Color = Settings.ESPColor -- อัปเดตสีตาม ColorPicker
+                        tracer.Color = Settings.LineColor
                         tracer.Thickness = 1
                      else
                         tracer.Visible = false
@@ -485,24 +470,21 @@ RunService.RenderStepped:Connect(function()
 
       if Settings.Noclip and LocalPlayer.Character then
          for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-               part.CanCollide = false
-            end
+            if part:IsA("BasePart") then part.CanCollide = false end
          end
       end
 
       if LocalPlayer.Character then
          for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") or part:IsA("Decal") then
-               if part.Name ~= "HumanoidRootPart" then
-                  part.Transparency = Settings.Invisibility and 1 or 0
-               end
+            if (part:IsA("BasePart") or part:IsA("Decal")) and part.Name ~= "HumanoidRootPart" then
+               part.Transparency = Settings.Invisibility and 1 or 0
             end
          end
       end
 
       if Settings.Fly and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
          local hrp = LocalPlayer.Character.HumanoidRootPart
+         local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
          local cam = Camera.CFrame
          local moveDir = Vector3.new()
          
@@ -511,12 +493,14 @@ RunService.RenderStepped:Connect(function()
          if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.RightVector end
          if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.RightVector end
          
+         if moveDir.Magnitude == 0 and humanoid and humanoid.MoveDirection.Magnitude > 0 then
+            moveDir = humanoid.MoveDirection
+         end
+         
          hrp.AssemblyLinearVelocity = moveDir * Settings.FlySpeed
-         hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.LookVector)
       end
    end)
 end)
 
-pcall(function()
-    Rayfield:LoadConfiguration()
-end)
+pcall(function() Rayfield:LoadConfiguration() end)
+
